@@ -45,12 +45,12 @@ function getExecutor(id) {
 function createRequest(data) {
   const request = {
     id: nanoid(10),
-    taskId: data.taskId,
+    taskId: data.taskId || '',
     timeFrom: data.timeFrom || '',
     timeTo: data.timeTo || '',
-    orderId: data.orderId,
-    technology: data.technology,
-    clientId: data.clientId,
+    orderId: data.orderId || '',
+    technology: data.technology || '',
+    clientId: data.clientId || '',
     email: data.email || '',
     clientName: data.clientName || '',
     homePhone: data.homePhone || '',
@@ -73,7 +73,7 @@ function createRequest(data) {
             copyable: !!item.copyable,
           }))
       : [],
-    executorId: data.executorId,
+    executorId: data.executorId || '',
     status: 'new', // new -> pending_review -> approved | rescheduled
     rescheduleDate: null,
     rescheduleComment: null,

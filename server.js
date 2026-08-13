@@ -63,9 +63,8 @@ app.get('/api/executors', (req, res) => {
 app.post('/api/requests', async (req, res) => {
   try {
     const b = req.body;
-    const required = ['taskId', 'orderId', 'technology', 'street', 'clientId', 'executorId'];
-    for (const field of required) {
-      if (!b[field]) return res.status(400).json({ error: `Поле "${field}" обов'язкове` });
+    if (!b.taskId && !b.orderId && !b.clientId && !b.street) {
+      return res.status(400).json({ error: 'Заповніть хоча б одне поле заявки' });
     }
     const request = db.createRequest(b);
     try {

@@ -14,6 +14,58 @@
     margin: 22px 0 10px;
     color: var(--text);
   }
+
+  .field { position: relative; }
+  .field-remove {
+    position: absolute;
+    top: -2px;
+    right: 0;
+    border: none;
+    background: none;
+    color: var(--hint);
+    font-size: 16px;
+    line-height: 1;
+    padding: 4px 6px;
+    cursor: pointer;
+  }
+  .field-remove:active { color: var(--accent-red, #e05252); }
+
+  .hidden-fields-bar {
+    display: none;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0 4px;
+  }
+  .hidden-chip {
+    border: 1px dashed rgba(0,0,0,0.25);
+    background: none;
+    color: var(--link);
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+  }
+
+  .tabs {
+    display: flex;
+    background: var(--secondary-bg);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 12px;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 9px 8px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--hint);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.active { background: var(--bg); color: var(--text); }
+
   #map {
     width: 100%;
     height: 220px;
@@ -21,151 +73,152 @@
     margin-bottom: 8px;
   }
   .map-hint { font-size: 12px; color: var(--hint); margin-bottom: 10px; }
+
+  .port-row { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+
   .info-row {
     background: var(--secondary-bg);
     border-radius: var(--radius);
     padding: 12px;
     margin-bottom: 10px;
   }
-  .info-row-top {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 8px;
-  }
+  .info-row-top { display: flex; gap: 8px; margin-bottom: 8px; }
   .info-row-top input { flex: 1; }
-  .info-row-bottom {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .checkbox-line {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--hint);
-  }
+  .info-row-bottom { display: flex; justify-content: space-between; align-items: center; }
+  .checkbox-line { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--hint); }
   .checkbox-line input { width: auto; }
-  .remove-info-btn {
-    border: none;
-    background: none;
-    color: var(--accent-red, #e05252);
-    font-size: 13px;
-    font-weight: 700;
-    cursor: pointer;
-  }
+  .remove-info-btn { border: none; background: none; color: var(--accent-red, #e05252); font-size: 13px; font-weight: 700; cursor: pointer; }
   .add-info-btn {
-    width: 100%;
-    padding: 12px;
-    border-radius: var(--radius);
-    border: 1px dashed rgba(0,0,0,0.2);
-    background: none;
-    color: var(--link);
-    font-weight: 700;
-    font-size: 14px;
-    cursor: pointer;
+    width: 100%; padding: 12px; border-radius: var(--radius);
+    border: 1px dashed rgba(0,0,0,0.2); background: none;
+    color: var(--link); font-weight: 700; font-size: 14px; cursor: pointer;
   }
 </style>
 </head>
 <body>
 <div class="screen">
   <h1>Нова заявка</h1>
+  <div class="hidden-fields-bar" id="hiddenFieldsBar"></div>
 
   <form id="form">
-    <div class="field">
+    <div class="field" data-label="ID завдання">
       <label>ID завдання</label>
-      <input type="text" id="taskId" placeholder="2261523605" required />
+      <input type="text" id="taskId" placeholder="2261523605" />
     </div>
 
     <div class="row-2">
-      <div class="field">
+      <div class="field" data-label="Час з">
         <label>Час з</label>
         <input type="time" id="timeFrom" value="11:00" />
       </div>
-      <div class="field">
-        <label>Час до (необов'язково)</label>
+      <div class="field" data-label="Час до">
+        <label>Час до</label>
         <input type="time" id="timeTo" />
       </div>
     </div>
 
-    <div class="field">
+    <div class="field" data-label="ID наряда">
       <label>ID наряда</label>
-      <input type="text" id="orderId" placeholder="1261471523" required />
+      <input type="text" id="orderId" placeholder="1261471523" />
     </div>
 
-    <div class="field">
+    <div class="field" data-label="Технологія">
       <label>Технологія</label>
-      <input type="text" id="technology" placeholder="Абонентська аварія" required />
+      <select id="technology">
+        <option value="Абонентська аварія">Абонентська аварія</option>
+        <option value="Абонентське Підключення">Абонентське Підключення</option>
+        <option value="Послуга Майстер">Послуга Майстер</option>
+        <option value="__custom">Інше…</option>
+      </select>
+      <input type="text" id="technologyCustom" placeholder="Вкажіть технологію" style="display:none; margin-top:8px;" />
     </div>
 
-    <div class="field">
+    <div class="field" data-label="ID клієнта">
       <label>ID клієнта</label>
-      <input type="text" id="clientId" placeholder="1000450016" required />
+      <input type="text" id="clientId" placeholder="1000450016" />
     </div>
 
     <div class="section-title">Клієнт</div>
 
-    <div class="field">
+    <div class="field" data-label="Ім'я">
       <label>Ім'я</label>
       <input type="text" id="clientName" placeholder="Катерина Марчук" />
     </div>
 
-    <div class="field">
+    <div class="field" data-label="Електронна пошта">
       <label>Електронна пошта</label>
       <input type="email" id="email" placeholder="client@example.com" />
     </div>
 
     <div class="row-2">
-      <div class="field">
+      <div class="field" data-label="Домашній телефон">
         <label>Домашній телефон</label>
         <input type="tel" id="homePhone" placeholder="380969725005" />
       </div>
-      <div class="field">
+      <div class="field" data-label="Мобільний телефон">
         <label>Мобільний телефон</label>
         <input type="tel" id="mobilePhone" placeholder="380969725005" />
       </div>
     </div>
 
-    <div class="field">
+    <div class="field" data-label="Робочий телефон">
       <label>Робочий телефон</label>
       <input type="tel" id="phone" placeholder="380969725005" />
     </div>
 
     <div class="section-title">Локація</div>
 
+    <div class="tabs">
+      <div class="tab active" data-loctab="map" id="locTabMap">На карті</div>
+      <div class="tab" data-loctab="manual" id="locTabManual">Вручну</div>
+    </div>
+
+    <div id="locMapBlock">
+      <div id="map"></div>
+      <div class="map-hint">Торкніться карти, щоб позначити адресу — поля нижче заповняться автоматично (їх можна відредагувати)</div>
+      <button type="button" class="btn secondary" id="locateBtn">📍 Моє місцезнаходження</button>
+    </div>
+
+    <div class="field" data-label="Місто" style="margin-top:14px;">
+      <label>Місто</label>
+      <input type="text" id="city" value="Звягель" />
+    </div>
+
     <div class="row-2">
-      <div class="field">
-        <label>Місто</label>
-        <input type="text" id="city" value="Звягель" required />
+      <div class="field" data-label="Вулиця, будинок">
+        <label>Вулиця, будинок</label>
+        <input type="text" id="street" placeholder="Мамайчука 17" />
       </div>
-      <div class="field">
-        <label>Кв. / поверх</label>
+      <div class="field" data-label="Кв. / під'їзд">
+        <label>Кв. / під'їзд</label>
         <input type="text" id="apt" placeholder="62" />
       </div>
     </div>
 
-    <div class="field">
-      <label>Вулиця, будинок</label>
-      <input type="text" id="street" placeholder="Мамайчука 17" required />
-    </div>
-
-    <div id="map"></div>
-    <div class="map-hint">Торкніться карти, щоб позначити точну адресу, або натисніть «Моє місцезнаходження»</div>
-    <button type="button" class="btn secondary" id="locateBtn">📍 Моє місцезнаходження</button>
+    <button type="button" class="btn secondary" id="geocodeBtn" style="margin-top:2px;">🔍 Знайти на мапі за адресою</button>
 
     <div class="section-title">Технічні дані</div>
 
-    <div class="field">
+    <div class="field" data-label="Порт">
       <label>Порт</label>
-      <input type="text" id="port" placeholder="Gigabit Ethernet (Copper).10" />
+      <div class="port-row">
+        <select id="portType">
+          <option value="">— не вказано —</option>
+          <option value="Ethernet">Ethernet</option>
+          <option value="Gigabit Ethernet">Gigabit Ethernet</option>
+        </select>
+        <select id="portNumber">
+          <option value="">№</option>
+        </select>
+      </div>
     </div>
 
-    <div class="field">
+    <div class="field" data-label="Адрес ТКД">
       <label>Адрес ТКД</label>
       <input type="text" id="tkdAddress" placeholder="Звягель м., вул. Мамайчука, 17, під. 6 (горище, )" />
     </div>
 
-    <div class="field">
+    <div class="field" data-label="ТКД">
       <label>ТКД</label>
       <input type="text" id="tkd" placeholder="MDU_NVV00002_4013_1" />
     </div>
@@ -175,9 +228,9 @@
     <button type="button" class="add-info-btn" id="addInfoBtn">+ Додаткова інформація</button>
 
     <div class="section-title">Виконавець</div>
-    <div class="field">
-      <select id="executorId" required>
-        <option value="" disabled selected>Оберіть виконавця…</option>
+    <div class="field" data-label="Виконавець">
+      <select id="executorId">
+        <option value="">Без виконавця (без сповіщення)</option>
       </select>
     </div>
 
@@ -197,7 +250,7 @@
     const t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2200);
+    setTimeout(() => t.classList.remove('show'), 2400);
   }
 
   async function apiFetch(url, options = {}) {
@@ -208,7 +261,83 @@
     return res.json();
   }
 
-  // ---------- Карта ----------
+  // ---------- Прибрати поле (зробити необов'язковим / не заповнювати) ----------
+  const hiddenBar = document.getElementById('hiddenFieldsBar');
+
+  function updateHiddenBar() {
+    hiddenBar.style.display = hiddenBar.children.length ? 'flex' : 'none';
+  }
+
+  function makeRemovable(fieldEl) {
+    const label = fieldEl.dataset.label || 'Поле';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'field-remove';
+    btn.title = `Прибрати «${label}»`;
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => {
+      fieldEl.style.display = 'none';
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'hidden-chip';
+      chip.textContent = `+ ${label}`;
+      chip.addEventListener('click', () => {
+        fieldEl.style.display = '';
+        chip.remove();
+        updateHiddenBar();
+      });
+      hiddenBar.appendChild(chip);
+      updateHiddenBar();
+    });
+    fieldEl.appendChild(btn);
+  }
+
+  document.querySelectorAll('.field[data-label]').forEach(makeRemovable);
+
+  function fieldVisible(el) {
+    return el.closest('.field') ? el.closest('.field').style.display !== 'none' : true;
+  }
+
+  // ---------- Технологія: "Інше" ----------
+  const techSelect = document.getElementById('technology');
+  const techCustom = document.getElementById('technologyCustom');
+  techSelect.addEventListener('change', () => {
+    techCustom.style.display = techSelect.value === '__custom' ? 'block' : 'none';
+  });
+
+  function getTechnology() {
+    if (!fieldVisible(techSelect)) return '';
+    return techSelect.value === '__custom' ? techCustom.value.trim() : techSelect.value;
+  }
+
+  // ---------- Порт: тип + номер 1-24 ----------
+  const portNumberSelect = document.getElementById('portNumber');
+  for (let i = 1; i <= 24; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i;
+    portNumberSelect.appendChild(opt);
+  }
+
+  function getPort() {
+    if (!fieldVisible(document.getElementById('portType'))) return '';
+    const type = document.getElementById('portType').value;
+    const num = portNumberSelect.value;
+    return type && num ? `${type}.${num}` : '';
+  }
+
+  // ---------- Локація: карта / вручну ----------
+  const locMapBlock = document.getElementById('locMapBlock');
+  document.getElementById('locTabMap').addEventListener('click', () => setLocTab('map'));
+  document.getElementById('locTabManual').addEventListener('click', () => setLocTab('manual'));
+
+  function setLocTab(tab) {
+    document.getElementById('locTabMap').classList.toggle('active', tab === 'map');
+    document.getElementById('locTabManual').classList.toggle('active', tab === 'manual');
+    locMapBlock.style.display = tab === 'map' ? 'block' : 'none';
+    if (tab === 'map') setTimeout(() => map.invalidateSize(), 200);
+  }
+
   const DEFAULT_CENTER = [50.5904, 27.6383]; // Звягель (Новоград-Волинський)
   let marker = null;
   const map = L.map('map').setView(DEFAULT_CENTER, 13);
@@ -224,14 +353,50 @@
       const p = marker.getLatLng();
       document.getElementById('lat').value = p.lat;
       document.getElementById('lng').value = p.lng;
+      reverseGeocode(p.lat, p.lng);
     });
     document.getElementById('lat').value = lat;
     document.getElementById('lng').value = lng;
   }
 
+  async function reverseGeocode(lat, lng) {
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}&accept-language=uk`);
+      const data = await res.json();
+      const a = data.address || {};
+      const cityVal = a.city || a.town || a.village || a.municipality || '';
+      const streetVal = [a.road, a.house_number].filter(Boolean).join(' ');
+      if (cityVal) document.getElementById('city').value = cityVal;
+      if (streetVal) document.getElementById('street').value = streetVal;
+    } catch (e) {
+      // геокодування не критичне — просто залишаємо поля як є
+    }
+  }
+
+  async function geocodeAddress() {
+    const city = document.getElementById('city').value.trim();
+    const street = document.getElementById('street').value.trim();
+    const query = [city, street].filter(Boolean).join(', ');
+    if (!query) return showToast('Вкажіть місто та вулицю для пошуку');
+    try {
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=1`);
+      const results = await res.json();
+      if (!results.length) return showToast('Адресу не знайдено на мапі');
+      const { lat, lon } = results[0];
+      setLocTab('map');
+      setMarker(parseFloat(lat), parseFloat(lon));
+      map.setView([lat, lon], 17);
+    } catch (e) {
+      showToast('Не вдалося знайти адресу');
+    }
+  }
+
+  document.getElementById('geocodeBtn').addEventListener('click', geocodeAddress);
+
   map.on('click', (e) => {
     setMarker(e.latlng.lat, e.latlng.lng);
     map.panTo(e.latlng);
+    reverseGeocode(e.latlng.lat, e.latlng.lng);
   });
 
   document.getElementById('locateBtn').addEventListener('click', () => {
@@ -241,6 +406,7 @@
         const { latitude, longitude } = pos.coords;
         setMarker(latitude, longitude);
         map.setView([latitude, longitude], 16);
+        reverseGeocode(latitude, longitude);
       },
       () => showToast('Не вдалося визначити місцезнаходження')
     );
@@ -300,13 +466,6 @@
     const select = document.getElementById('executorId');
     try {
       const executors = await apiFetch('/api/executors');
-      if (!executors.length) {
-        const opt = document.createElement('option');
-        opt.textContent = 'Немає зареєстрованих виконавців';
-        opt.disabled = true;
-        select.appendChild(opt);
-        return;
-      }
       executors.forEach((e) => {
         const opt = document.createElement('option');
         opt.value = e.id;
@@ -319,40 +478,48 @@
   }
   loadExecutors();
 
+  // ---------- Допоміжне: значення поля лише якщо воно видиме ----------
+  function val(id) {
+    const el = document.getElementById(id);
+    if (!fieldVisible(el)) return '';
+    return el.value.trim();
+  }
+
   // ---------- Сабміт ----------
   document.getElementById('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = {
-      taskId: document.getElementById('taskId').value.trim(),
-      timeFrom: document.getElementById('timeFrom').value,
-      timeTo: document.getElementById('timeTo').value,
-      orderId: document.getElementById('orderId').value.trim(),
-      technology: document.getElementById('technology').value.trim(),
-      clientId: document.getElementById('clientId').value.trim(),
-      clientName: document.getElementById('clientName').value.trim(),
-      email: document.getElementById('email').value.trim(),
-      homePhone: document.getElementById('homePhone').value.trim(),
-      mobilePhone: document.getElementById('mobilePhone').value.trim(),
-      phone: document.getElementById('phone').value.trim(),
-      city: document.getElementById('city').value.trim(),
-      street: document.getElementById('street').value.trim(),
-      apt: document.getElementById('apt').value.trim(),
+      taskId: val('taskId'),
+      timeFrom: val('timeFrom'),
+      timeTo: val('timeTo'),
+      orderId: val('orderId'),
+      technology: getTechnology(),
+      clientId: val('clientId'),
+      clientName: val('clientName'),
+      email: val('email'),
+      homePhone: val('homePhone'),
+      mobilePhone: val('mobilePhone'),
+      phone: val('phone'),
+      city: val('city'),
+      street: val('street'),
+      apt: val('apt'),
       lat: document.getElementById('lat').value || null,
       lng: document.getElementById('lng').value || null,
-      port: document.getElementById('port').value.trim(),
-      tkdAddress: document.getElementById('tkdAddress').value.trim(),
-      tkd: document.getElementById('tkd').value.trim(),
+      port: getPort(),
+      tkdAddress: val('tkdAddress'),
+      tkd: val('tkd'),
       additionalInfo: collectAdditionalInfo(),
-      executorId: document.getElementById('executorId').value,
+      executorId: fieldVisible(document.getElementById('executorId')) ? document.getElementById('executorId').value : '',
     };
 
     try {
       await apiFetch('/api/requests', { method: 'POST', body: JSON.stringify(payload) });
-      showToast('Заявку створено та надіслано виконавцю ✅');
+      showToast(payload.executorId ? 'Заявку створено та надіслано виконавцю ✅' : 'Заявку створено (без виконавця) ✅');
       document.getElementById('form').reset();
       document.getElementById('city').value = 'Звягель';
       document.getElementById('timeFrom').value = '11:00';
       document.getElementById('additionalInfoList').innerHTML = '';
+      techCustom.style.display = 'none';
       if (marker) { map.removeLayer(marker); marker = null; }
       document.getElementById('lat').value = '';
       document.getElementById('lng').value = '';
