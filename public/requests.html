@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Заявки</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="screen">
+  <h1 id="heading">Мої заявки</h1>
+  <div id="list"></div>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  tg?.ready();
+  tg?.expand();
+
+  const params = new URLSearchParams(location.search);
+  const role = params.get('role') || 'executor';
+  const executorId = params.get('executorId') || '';
+
+  const statusLabels = {
+    new: 'Нова',
+    pending_review: 'На перевірці',
+    rescheduled: 'Перенесена',
+    approved: 'Виконана',
+  };
+
+  document.getElementById('heading').textContent = role === 'admin' ? 'Усі заявки' : 'Мої заявки';
+
+  async function apiFetch(url) {
+    const headers = {};
+    if (tg?.initData) headers['X-Telegram-Init-Data'] = tg.initData;
+    const res = await fetch(url, { headers });
+    if (!res.ok) throw new Error('Помилка запиту');
+    return res.json();
+  }
+
+  function requestUrl(id) {
+    const p = new URLSearchParams({ id });
+    if (role === 'admin') p.set('role', 'admin');
+    return `request.html?${p.toString()}`;
+  }
+
+  async function load() {
+    const listEl = document.getElementById('list');
+    let url = '/api/requests';
+    if (role === 'executor' && executorId) url += `?executorId=${encodeURIComponent(executorId)}`;
+
+    try {
+      const requests = await apiFetch(url);
+      if (!requests.length) {
+        listEl.innerHTML = '<div class="empty">Тут поки що порожньо</div>';
+        return;
+      }
+      listEl.innerHTML = requests
+        .map(
+          (r) => `
+        <a class="card-list-item" style="text-decoration:none;color:inherit" href="${requestUrl(r.id)}">
+          <div>
+            <div class="title">Завдання №${r.taskId}</div>
+            <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''} · ${r.timeFrom}–${r.timeTo}</div>
+          </div>
+          <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
+        </a>`
+        )
+        .join('');
+    } catch (err) {
+      listEl.innerHTML = '<div class="empty">Не вдалося завантажити заявки</div>';
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

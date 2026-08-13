@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Заявка</title>
+<link rel="stylesheet" href="style.css" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="screen">
+  <h1>Заявка <span id="taskIdHeading"></span></h1>
+  <div id="content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  tg?.ready();
+  tg?.expand();
+
+  const params = new URLSearchParams(location.search);
+  const id = params.get('id');
+  const role = params.get('role') || 'executor';
+
+  const statusLabels = {
+    new: 'Нова',
+    pending_review: 'На перевірці',
+    rescheduled: 'Перенесена',
+    approved: 'Виконана',
+  };
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  async function apiFetch(url, options = {}) {
+    const headers = options.headers || {};
+    if (tg?.initData) headers['X-Telegram-Init-Data'] = tg.initData;
+    const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...headers } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Помилка запиту');
+    return res.json();
+  }
+
+  function copyText(text, label) {
+    navigator.clipboard?.writeText(text).then(
+      () => showToast(`${label} скопійовано`),
+      () => showToast('Не вдалося скопіювати')
+    );
+  }
+
+  function mapUrl(r) {
+    const q = encodeURIComponent(`${r.city}, ${r.street}`);
+    return `https://maps.google.com/?q=${q}`;
+  }
+
+  function render(r) {
+    document.getElementById('taskIdHeading').textContent = `№${r.taskId}`;
+
+    const address = `${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}`;
+
+    let actionsHtml = '';
+
+    if (role === 'admin') {
+      if (r.status === 'pending_review') {
+        actionsHtml = `
+          <button class="btn" id="approveBtn">Прийняти виконання</button>
+          <button class="btn secondary" id="rejectBtn">Повернути на доопрацювання</button>`;
+      }
+    } else {
+      if (r.status === 'new') {
+        actionsHtml = `
+          <button class="btn" id="confirmBtn">Підтвердити виконання</button>
+          <button class="btn secondary" id="rescheduleBtn">Перенести на інший день</button>
+          <div class="card" id="rescheduleForm" style="display:none; margin-top:10px;">
+            <div class="field">
+              <label>Нова дата</label>
+              <input type="date" id="rescheduleDate" />
+            </div>
+            <div class="field">
+              <label>Коментар (необов'язково)</label>
+              <input type="text" id="rescheduleComment" placeholder="Причина перенесення" />
+            </div>
+            <button class="btn danger" id="rescheduleSubmit">Підтвердити перенесення</button>
+          </div>`;
+      } else if (r.status === 'rescheduled') {
+        actionsHtml = `<div class="card"><div class="kv"><span class="k">Перенесено на</span><span class="v">${r.rescheduleDate}</span></div>${
+          r.rescheduleComment ? `<div class="kv"><span class="k">Коментар</span><span class="v">${r.rescheduleComment}</span></div>` : ''
+        }</div>`;
+      }
+    }
+
+    document.getElementById('content').innerHTML = `
+      <div class="card">
+        <div class="kv">
+          <span class="k">Статус</span>
+          <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
+        </div>
+        <div class="kv">
+          <span class="k">ID завдання</span>
+          <span class="v">${r.taskId} <button class="copy-btn" data-copy="${r.taskId}" data-label="ID завдання">Копіювати</button></span>
+        </div>
+        <div class="kv">
+          <span class="k">Час</span>
+          <span class="v">з ${r.timeFrom} до ${r.timeTo}</span>
+        </div>
+        <div class="kv">
+          <span class="k">ID наряду</span>
+          <span class="v">${r.orderId} <button class="copy-btn" data-copy="${r.orderId}" data-label="ID наряду">Копіювати</button></span>
+        </div>
+        <div class="kv">
+          <span class="k">Технологія</span>
+          <span class="v">${r.technology}</span>
+        </div>
+        <div class="kv">
+          <span class="k">ID клієнта</span>
+          <span class="v">${r.clientId}</span>
+        </div>
+        ${r.executorName ? `<div class="kv"><span class="k">Виконавець</span><span class="v">${r.executorName}</span></div>` : ''}
+      </div>
+
+      <div class="card">
+        <div class="address-block">
+          <div>
+            <div class="kv" style="border:none;padding:0 0 4px">
+              <span class="k">Локація</span>
+            </div>
+            <div class="v" style="text-align:left">${address}</div>
+          </div>
+          <a class="link-btn" href="${mapUrl(r)}" target="_blank" rel="noopener">Відкрити на мапі</a>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="address-block">
+          <div>
+            <div class="kv" style="border:none;padding:0 0 4px"><span class="k">Номер телефону</span></div>
+            <div class="v" style="text-align:left">${r.phone}</div>
+          </div>
+          <a class="link-btn" href="tel:${r.phone}">Зателефонувати</a>
+        </div>
+      </div>
+
+      ${actionsHtml}
+    `;
+
+    document.querySelectorAll('.copy-btn').forEach((btn) => {
+      btn.addEventListener('click', () => copyText(btn.dataset.copy, btn.dataset.label));
+    });
+
+    if (role === 'admin') {
+      document.getElementById('approveBtn')?.addEventListener('click', async () => {
+        try {
+          await apiFetch(`/api/requests/${r.id}/approve`, { method: 'POST' });
+          showToast('Заявку прийнято');
+          load();
+        } catch (e) { showToast(e.message); }
+      });
+      document.getElementById('rejectBtn')?.addEventListener('click', async () => {
+        try {
+          await apiFetch(`/api/requests/${r.id}/reject`, { method: 'POST' });
+          showToast('Повернено виконавцю');
+          load();
+        } catch (e) { showToast(e.message); }
+      });
+    } else {
+      document.getElementById('confirmBtn')?.addEventListener('click', async () => {
+        try {
+          await apiFetch(`/api/requests/${r.id}/confirm`, { method: 'POST' });
+          showToast('Надіслано адміністратору на перевірку ✅');
+          load();
+        } catch (e) { showToast(e.message); }
+      });
+      document.getElementById('rescheduleBtn')?.addEventListener('click', () => {
+        document.getElementById('rescheduleForm').style.display = 'block';
+      });
+      document.getElementById('rescheduleSubmit')?.addEventListener('click', async () => {
+        const date = document.getElementById('rescheduleDate').value;
+        const comment = document.getElementById('rescheduleComment').value;
+        if (!date) return showToast('Оберіть дату');
+        try {
+          await apiFetch(`/api/requests/${r.id}/reschedule`, {
+            method: 'POST',
+            body: JSON.stringify({ date, comment }),
+          });
+          showToast('Заявку перенесено, адміністратора повідомлено');
+          load();
+        } catch (e) { showToast(e.message); }
+      });
+    }
+  }
+
+  async function load() {
+    try {
+      const r = await apiFetch(`/api/requests/${id}`);
+      render(r);
+    } catch (err) {
+      document.getElementById('content').innerHTML = '<div class="empty">Заявку не знайдено</div>';
+    }
+  }
+
+  if (!id) {
+    document.getElementById('content').innerHTML = '<div class="empty">Не вказано ID заявки</div>';
+  } else {
+    load();
+  }
+</script>
+</body>
+</html>
