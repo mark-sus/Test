@@ -5,7 +5,67 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Нова заявка</title>
 <link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 22px 0 10px;
+    color: var(--text);
+  }
+  #map {
+    width: 100%;
+    height: 220px;
+    border-radius: var(--radius);
+    margin-bottom: 8px;
+  }
+  .map-hint { font-size: 12px; color: var(--hint); margin-bottom: 10px; }
+  .info-row {
+    background: var(--secondary-bg);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+  .info-row-top {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .info-row-top input { flex: 1; }
+  .info-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .checkbox-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--hint);
+  }
+  .checkbox-line input { width: auto; }
+  .remove-info-btn {
+    border: none;
+    background: none;
+    color: var(--accent-red, #e05252);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .add-info-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: var(--radius);
+    border: 1px dashed rgba(0,0,0,0.2);
+    background: none;
+    color: var(--link);
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
 </head>
 <body>
 <div class="screen">
@@ -14,58 +74,108 @@
   <form id="form">
     <div class="field">
       <label>ID завдання</label>
-      <input type="text" id="taskId" placeholder="2261399736" required />
+      <input type="text" id="taskId" placeholder="2261523605" required />
     </div>
 
     <div class="row-2">
       <div class="field">
         <label>Час з</label>
-        <input type="time" id="timeFrom" value="15:00" required />
+        <input type="time" id="timeFrom" value="11:00" />
       </div>
       <div class="field">
-        <label>Час до</label>
-        <input type="time" id="timeTo" value="16:00" required />
+        <label>Час до (необов'язково)</label>
+        <input type="time" id="timeTo" />
       </div>
     </div>
 
     <div class="field">
       <label>ID наряда</label>
-      <input type="text" id="orderId" placeholder="1261357263" required />
+      <input type="text" id="orderId" placeholder="1261471523" required />
     </div>
 
     <div class="field">
-      <label>Технологія / Послуга</label>
-      <input type="text" id="technology" placeholder="Послуга Майстер" required />
-    </div>
-
-    <div class="field">
-      <label>Робочий телефон</label>
-      <input type="tel" id="phone" placeholder="380967165334" required />
-    </div>
-
-    <div class="field">
-      <label>Місто</label>
-      <input type="text" id="city" value="Звягель" required />
-    </div>
-
-    <div class="row-2">
-      <div class="field">
-        <label>Вулиця, будинок</label>
-        <input type="text" id="street" placeholder="Європейська 14" required />
-      </div>
-      <div class="field">
-        <label>Кв. / офіс</label>
-        <input type="text" id="apt" placeholder="20" />
-      </div>
+      <label>Технологія</label>
+      <input type="text" id="technology" placeholder="Абонентська аварія" required />
     </div>
 
     <div class="field">
       <label>ID клієнта</label>
-      <input type="text" id="clientId" placeholder="380967165334" required />
+      <input type="text" id="clientId" placeholder="1000450016" required />
+    </div>
+
+    <div class="section-title">Клієнт</div>
+
+    <div class="field">
+      <label>Ім'я</label>
+      <input type="text" id="clientName" placeholder="Катерина Марчук" />
     </div>
 
     <div class="field">
-      <label>Виконавець</label>
+      <label>Електронна пошта</label>
+      <input type="email" id="email" placeholder="client@example.com" />
+    </div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Домашній телефон</label>
+        <input type="tel" id="homePhone" placeholder="380969725005" />
+      </div>
+      <div class="field">
+        <label>Мобільний телефон</label>
+        <input type="tel" id="mobilePhone" placeholder="380969725005" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Робочий телефон</label>
+      <input type="tel" id="phone" placeholder="380969725005" />
+    </div>
+
+    <div class="section-title">Локація</div>
+
+    <div class="row-2">
+      <div class="field">
+        <label>Місто</label>
+        <input type="text" id="city" value="Звягель" required />
+      </div>
+      <div class="field">
+        <label>Кв. / поверх</label>
+        <input type="text" id="apt" placeholder="62" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Вулиця, будинок</label>
+      <input type="text" id="street" placeholder="Мамайчука 17" required />
+    </div>
+
+    <div id="map"></div>
+    <div class="map-hint">Торкніться карти, щоб позначити точну адресу, або натисніть «Моє місцезнаходження»</div>
+    <button type="button" class="btn secondary" id="locateBtn">📍 Моє місцезнаходження</button>
+
+    <div class="section-title">Технічні дані</div>
+
+    <div class="field">
+      <label>Порт</label>
+      <input type="text" id="port" placeholder="Gigabit Ethernet (Copper).10" />
+    </div>
+
+    <div class="field">
+      <label>Адрес ТКД</label>
+      <input type="text" id="tkdAddress" placeholder="Звягель м., вул. Мамайчука, 17, під. 6 (горище, )" />
+    </div>
+
+    <div class="field">
+      <label>ТКД</label>
+      <input type="text" id="tkd" placeholder="MDU_NVV00002_4013_1" />
+    </div>
+
+    <div class="section-title">Додаткова інформація</div>
+    <div id="additionalInfoList"></div>
+    <button type="button" class="add-info-btn" id="addInfoBtn">+ Додаткова інформація</button>
+
+    <div class="section-title">Виконавець</div>
+    <div class="field">
       <select id="executorId" required>
         <option value="" disabled selected>Оберіть виконавця…</option>
       </select>
@@ -77,6 +187,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   tg?.ready();
@@ -97,6 +208,94 @@
     return res.json();
   }
 
+  // ---------- Карта ----------
+  const DEFAULT_CENTER = [50.5904, 27.6383]; // Звягель (Новоград-Волинський)
+  let marker = null;
+  const map = L.map('map').setView(DEFAULT_CENTER, 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 19,
+  }).addTo(map);
+
+  function setMarker(lat, lng) {
+    if (marker) marker.setLatLng([lat, lng]);
+    else marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+    marker.on('dragend', () => {
+      const p = marker.getLatLng();
+      document.getElementById('lat').value = p.lat;
+      document.getElementById('lng').value = p.lng;
+    });
+    document.getElementById('lat').value = lat;
+    document.getElementById('lng').value = lng;
+  }
+
+  map.on('click', (e) => {
+    setMarker(e.latlng.lat, e.latlng.lng);
+    map.panTo(e.latlng);
+  });
+
+  document.getElementById('locateBtn').addEventListener('click', () => {
+    if (!navigator.geolocation) return showToast('Геолокація недоступна в цьому браузері');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setMarker(latitude, longitude);
+        map.setView([latitude, longitude], 16);
+      },
+      () => showToast('Не вдалося визначити місцезнаходження')
+    );
+  });
+
+  // приховані поля для координат
+  const latInput = document.createElement('input');
+  latInput.type = 'hidden';
+  latInput.id = 'lat';
+  const lngInput = document.createElement('input');
+  lngInput.type = 'hidden';
+  lngInput.id = 'lng';
+  document.getElementById('form').appendChild(latInput);
+  document.getElementById('form').appendChild(lngInput);
+
+  setTimeout(() => map.invalidateSize(), 300);
+
+  // ---------- Додаткова інформація ----------
+  let infoCounter = 0;
+  function addInfoRow() {
+    infoCounter += 1;
+    const rowId = `info-${infoCounter}`;
+    const wrap = document.createElement('div');
+    wrap.className = 'info-row';
+    wrap.id = rowId;
+    wrap.innerHTML = `
+      <div class="info-row-top">
+        <input type="text" placeholder="Назва" class="info-name" />
+        <input type="text" placeholder="Інформація" class="info-value" />
+      </div>
+      <div class="info-row-bottom">
+        <label class="checkbox-line">
+          <input type="checkbox" class="info-copyable" checked />
+          Дозволити копіювання
+        </label>
+        <button type="button" class="remove-info-btn" data-target="${rowId}">Видалити</button>
+      </div>
+    `;
+    document.getElementById('additionalInfoList').appendChild(wrap);
+    wrap.querySelector('.remove-info-btn').addEventListener('click', () => wrap.remove());
+  }
+
+  document.getElementById('addInfoBtn').addEventListener('click', addInfoRow);
+
+  function collectAdditionalInfo() {
+    return [...document.querySelectorAll('#additionalInfoList .info-row')]
+      .map((row) => ({
+        name: row.querySelector('.info-name').value.trim(),
+        value: row.querySelector('.info-value').value.trim(),
+        copyable: row.querySelector('.info-copyable').checked,
+      }))
+      .filter((item) => item.name || item.value);
+  }
+
+  // ---------- Виконавці ----------
   async function loadExecutors() {
     const select = document.getElementById('executorId');
     try {
@@ -118,9 +317,9 @@
       showToast('Не вдалося завантажити виконавців');
     }
   }
-
   loadExecutors();
 
+  // ---------- Сабміт ----------
   document.getElementById('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const payload = {
@@ -129,26 +328,36 @@
       timeTo: document.getElementById('timeTo').value,
       orderId: document.getElementById('orderId').value.trim(),
       technology: document.getElementById('technology').value.trim(),
+      clientId: document.getElementById('clientId').value.trim(),
+      clientName: document.getElementById('clientName').value.trim(),
+      email: document.getElementById('email').value.trim(),
+      homePhone: document.getElementById('homePhone').value.trim(),
+      mobilePhone: document.getElementById('mobilePhone').value.trim(),
       phone: document.getElementById('phone').value.trim(),
       city: document.getElementById('city').value.trim(),
       street: document.getElementById('street').value.trim(),
       apt: document.getElementById('apt').value.trim(),
-      clientId: document.getElementById('clientId').value.trim(),
+      lat: document.getElementById('lat').value || null,
+      lng: document.getElementById('lng').value || null,
+      port: document.getElementById('port').value.trim(),
+      tkdAddress: document.getElementById('tkdAddress').value.trim(),
+      tkd: document.getElementById('tkd').value.trim(),
+      additionalInfo: collectAdditionalInfo(),
       executorId: document.getElementById('executorId').value,
     };
 
     try {
-      tg?.MainButton?.showProgress?.();
       await apiFetch('/api/requests', { method: 'POST', body: JSON.stringify(payload) });
       showToast('Заявку створено та надіслано виконавцю ✅');
       document.getElementById('form').reset();
       document.getElementById('city').value = 'Звягель';
-      document.getElementById('timeFrom').value = '15:00';
-      document.getElementById('timeTo').value = '16:00';
+      document.getElementById('timeFrom').value = '11:00';
+      document.getElementById('additionalInfoList').innerHTML = '';
+      if (marker) { map.removeLayer(marker); marker = null; }
+      document.getElementById('lat').value = '';
+      document.getElementById('lng').value = '';
     } catch (err) {
       showToast(err.message || 'Помилка створення заявки');
-    } finally {
-      tg?.MainButton?.hideProgress?.();
     }
   });
 </script>

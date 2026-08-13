@@ -6,6 +6,27 @@
 <title>Заявка</title>
 <link rel="stylesheet" href="style.css" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  .section-title {
+    font-size: 15px;
+    font-weight: 700;
+    margin: 22px 0 10px;
+    color: var(--text);
+  }
+  .info-item {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+  }
+  .info-item:last-child { border-bottom: none; }
+  .info-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+  .info-item .k { font-size: 13px; color: var(--hint); }
+  .info-item .v { font-size: 15px; font-weight: 600; margin-top: 2px; }
+</style>
 </head>
 <body>
 <div class="screen">
@@ -53,15 +74,34 @@
     );
   }
 
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   function mapUrl(r) {
+    if (r.lat && r.lng) return `https://maps.google.com/?q=${r.lat},${r.lng}`;
     const q = encodeURIComponent(`${r.city}, ${r.street}`);
     return `https://maps.google.com/?q=${q}`;
+  }
+
+  function copyRow(label, value) {
+    if (!value) return '';
+    return `<div class="kv">
+      <span class="k">${esc(label)}</span>
+      <span class="v">${esc(value)} <button class="copy-btn" data-copy="${esc(value)}" data-label="${esc(label)}">Копіювати</button></span>
+    </div>`;
+  }
+
+  function plainRow(label, value) {
+    if (!value) return '';
+    return `<div class="kv"><span class="k">${esc(label)}</span><span class="v">${esc(value)}</span></div>`;
   }
 
   function render(r) {
     document.getElementById('taskIdHeading').textContent = `№${r.taskId}`;
 
-    const address = `${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}`;
+    const address = `${r.city}, ${r.street}${r.apt ? ', кв./під. ' + r.apt : ''}`;
+    const timeStr = r.timeFrom ? `з ${r.timeFrom}${r.timeTo ? ' до ' + r.timeTo : ''}` : '';
 
     let actionsHtml = '';
 
@@ -88,11 +128,48 @@
             <button class="btn danger" id="rescheduleSubmit">Підтвердити перенесення</button>
           </div>`;
       } else if (r.status === 'rescheduled') {
-        actionsHtml = `<div class="card"><div class="kv"><span class="k">Перенесено на</span><span class="v">${r.rescheduleDate}</span></div>${
-          r.rescheduleComment ? `<div class="kv"><span class="k">Коментар</span><span class="v">${r.rescheduleComment}</span></div>` : ''
+        actionsHtml = `<div class="card"><div class="kv"><span class="k">Перенесено на</span><span class="v">${esc(r.rescheduleDate)}</span></div>${
+          r.rescheduleComment ? `<div class="kv"><span class="k">Коментар</span><span class="v">${esc(r.rescheduleComment)}</span></div>` : ''
         }</div>`;
       }
     }
+
+    const phonesHtml = ['workPhone', 'mobilePhone', 'homePhone']
+      .map((key) => {
+        const labels = { workPhone: 'Робочий телефон', mobilePhone: 'Мобільний телефон', homePhone: 'Домашній телефон' };
+        const val = r[key];
+        if (!val) return '';
+        return `<div class="card">
+          <div class="address-block">
+            <div>
+              <div class="kv" style="border:none;padding:0 0 4px"><span class="k">${labels[key]}</span></div>
+              <div class="v" style="text-align:left">${esc(val)}</div>
+            </div>
+            <a class="link-btn" href="tel:${esc(val)}">Зателефонувати</a>
+          </div>
+        </div>`;
+      })
+      .join('');
+
+    const additionalHtml = (r.additionalInfo || []).length
+      ? `<div class="section-title">Додаткова інформація</div>
+         <div class="card">
+           ${r.additionalInfo
+             .map(
+               (item) => `
+             <div class="info-item">
+               <div class="info-item-top">
+                 <div>
+                   <div class="k">${esc(item.name || 'Без назви')}</div>
+                   <div class="v">${esc(item.value)}</div>
+                 </div>
+                 ${item.copyable ? `<button class="copy-btn" data-copy="${esc(item.value)}" data-label="${esc(item.name || 'Значення')}">Копіювати</button>` : ''}
+               </div>
+             </div>`
+             )
+             .join('')}
+         </div>`
+      : '';
 
     document.getElementById('content').innerHTML = `
       <div class="card">
@@ -100,50 +177,37 @@
           <span class="k">Статус</span>
           <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
         </div>
-        <div class="kv">
-          <span class="k">ID завдання</span>
-          <span class="v">${r.taskId} <button class="copy-btn" data-copy="${r.taskId}" data-label="ID завдання">Копіювати</button></span>
-        </div>
-        <div class="kv">
-          <span class="k">Час</span>
-          <span class="v">з ${r.timeFrom} до ${r.timeTo}</span>
-        </div>
-        <div class="kv">
-          <span class="k">ID наряду</span>
-          <span class="v">${r.orderId} <button class="copy-btn" data-copy="${r.orderId}" data-label="ID наряду">Копіювати</button></span>
-        </div>
-        <div class="kv">
-          <span class="k">Технологія</span>
-          <span class="v">${r.technology}</span>
-        </div>
-        <div class="kv">
-          <span class="k">ID клієнта</span>
-          <span class="v">${r.clientId}</span>
-        </div>
-        ${r.executorName ? `<div class="kv"><span class="k">Виконавець</span><span class="v">${r.executorName}</span></div>` : ''}
+        ${copyRow('ID завдання', r.taskId)}
+        ${timeStr ? `<div class="kv"><span class="k">Час</span><span class="v">${esc(timeStr)}</span></div>` : ''}
+        ${copyRow('ID наряду', r.orderId)}
+        ${plainRow('Технологія', r.technology)}
+        ${copyRow('ID клієнта', r.clientId)}
+        ${plainRow("Ім'я клієнта", r.clientName)}
+        ${plainRow('Електронна пошта', r.email)}
+        ${r.executorName ? `<div class="kv"><span class="k">Виконавець</span><span class="v">${esc(r.executorName)}</span></div>` : ''}
       </div>
 
       <div class="card">
         <div class="address-block">
           <div>
-            <div class="kv" style="border:none;padding:0 0 4px">
-              <span class="k">Локація</span>
-            </div>
-            <div class="v" style="text-align:left">${address}</div>
+            <div class="kv" style="border:none;padding:0 0 4px"><span class="k">Локація</span></div>
+            <div class="v" style="text-align:left">${esc(address)}</div>
           </div>
           <a class="link-btn" href="${mapUrl(r)}" target="_blank" rel="noopener">Відкрити на мапі</a>
         </div>
       </div>
 
+      ${phonesHtml}
+
+      ${(r.port || r.tkdAddress || r.tkd) ? `
+      <div class="section-title">Технічні дані</div>
       <div class="card">
-        <div class="address-block">
-          <div>
-            <div class="kv" style="border:none;padding:0 0 4px"><span class="k">Номер телефону</span></div>
-            <div class="v" style="text-align:left">${r.phone}</div>
-          </div>
-          <a class="link-btn" href="tel:${r.phone}">Зателефонувати</a>
-        </div>
-      </div>
+        ${copyRow('Порт', r.port)}
+        ${copyRow('Адрес ТКД', r.tkdAddress)}
+        ${copyRow('ТКД', r.tkd)}
+      </div>` : ''}
+
+      ${additionalHtml}
 
       ${actionsHtml}
     `;

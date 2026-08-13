@@ -59,9 +59,10 @@ async function notifyExecutorNewRequest(request) {
   const executor = db.getExecutor(request.executorId);
   if (!executor) return;
   const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
+  const timeStr = request.timeFrom ? `\nЧас: з ${request.timeFrom}${request.timeTo ? ' до ' + request.timeTo : ''}` : '';
   await bot.telegram.sendMessage(
     executor.chatId,
-    `🆕 Нова заявка №${request.taskId}\nЧас: ${request.timeFrom}–${request.timeTo}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв. ' + request.apt : ''}`,
+    `🆕 Нова заявка №${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв./під. ' + request.apt : ''}`,
     Markup.inlineKeyboard([Markup.button.webApp('Відкрити заявку', url)])
   );
 }

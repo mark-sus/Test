@@ -57,16 +57,17 @@
         return;
       }
       listEl.innerHTML = requests
-        .map(
-          (r) => `
+        .map((r) => {
+          const timeStr = r.timeFrom ? `з ${r.timeFrom}${r.timeTo ? ' до ' + r.timeTo : ''}` : '';
+          return `
         <a class="card-list-item" style="text-decoration:none;color:inherit" href="${requestUrl(r.id)}">
           <div>
             <div class="title">Завдання №${r.taskId}</div>
-            <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''} · ${r.timeFrom}–${r.timeTo}</div>
+            <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}${timeStr ? ' · ' + timeStr : ''}</div>
           </div>
           <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
-        </a>`
-        )
+        </a>`;
+        })
         .join('');
     } catch (err) {
       listEl.innerHTML = '<div class="empty">Не вдалося завантажити заявки</div>';

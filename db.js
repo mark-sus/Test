@@ -46,17 +46,35 @@ function createRequest(data) {
   const request = {
     id: nanoid(10),
     taskId: data.taskId,
-    timeFrom: data.timeFrom,
-    timeTo: data.timeTo,
+    timeFrom: data.timeFrom || '',
+    timeTo: data.timeTo || '',
     orderId: data.orderId,
     technology: data.technology,
+    clientId: data.clientId,
+    email: data.email || '',
+    clientName: data.clientName || '',
+    homePhone: data.homePhone || '',
+    mobilePhone: data.mobilePhone || '',
+    phone: data.phone || '', // робочий телефон
     city: data.city || 'Звягель',
     street: data.street,
     apt: data.apt || '',
-    phone: data.phone,
-    clientId: data.clientId,
+    lat: data.lat || null,
+    lng: data.lng || null,
+    port: data.port || '',
+    tkdAddress: data.tkdAddress || '',
+    tkd: data.tkd || '',
+    additionalInfo: Array.isArray(data.additionalInfo)
+      ? data.additionalInfo
+          .filter((item) => item && (item.name || item.value))
+          .map((item) => ({
+            name: item.name || '',
+            value: item.value || '',
+            copyable: !!item.copyable,
+          }))
+      : [],
     executorId: data.executorId,
-    status: 'new', // new -> confirmed_review -> approved | rescheduled
+    status: 'new', // new -> pending_review -> approved | rescheduled
     rescheduleDate: null,
     rescheduleComment: null,
     createdAt: new Date().toISOString(),
