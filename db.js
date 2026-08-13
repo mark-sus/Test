@@ -6,7 +6,7 @@ const { nanoid } = require('nanoid');
 const adapter = new FileSync(path.join(__dirname, 'data.json'));
 const db = low(adapter);
 
-db.defaults({ executors: [], requests: [] }).write();
+db.defaults({ executors: [], requests: [], messages: [] }).write();
 
 // ---------- Виконавці ----------
 
@@ -108,6 +108,25 @@ function updateRequest(id, patch) {
   return getRequest(id);
 }
 
+// ---------- Чат по заявці ----------
+
+function addMessage(requestId, { role, authorName, text }) {
+  const message = {
+    id: nanoid(10),
+    requestId,
+    role, // 'admin' | 'executor'
+    authorName: authorName || (role === 'admin' ? 'Адміністратор' : 'Виконавець'),
+    text,
+    createdAt: new Date().toISOString(),
+  };
+  db.get('messages').push(message).write();
+  return message;
+}
+
+function listMessages(requestId) {
+  return db.get('messages').filter({ requestId }).orderBy(['createdAt'], ['asc']).value();
+}
+
 module.exports = {
   upsertExecutor,
   listExecutors,
@@ -117,4 +136,6 @@ module.exports = {
   listAllRequests,
   getRequest,
   updateRequest,
+  addMessage,
+  listMessages,
 };

@@ -6,10 +6,45 @@
 <title>Заявки</title>
 <link rel="stylesheet" href="style.css" />
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  .tabs {
+    display: flex;
+    background: var(--secondary-bg);
+    border-radius: 12px;
+    padding: 4px;
+    margin-bottom: 16px;
+  }
+  .tab {
+    flex: 1;
+    text-align: center;
+    padding: 9px 8px;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--hint);
+    cursor: pointer;
+    user-select: none;
+  }
+  .tab.active {
+    background: var(--bg);
+    color: var(--text);
+  }
+  .tab .count {
+    font-weight: 700;
+    opacity: 0.6;
+    margin-left: 3px;
+  }
+</style>
 </head>
 <body>
 <div class="screen">
   <h1 id="heading">Мої заявки</h1>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="active" id="tabActive">Нові<span class="count" id="countActive"></span></div>
+    <div class="tab" data-tab="done" id="tabDone">Виконані<span class="count" id="countDone"></span></div>
+  </div>
+
   <div id="list"></div>
 </div>
 
@@ -29,7 +64,14 @@
     approved: 'Виконана',
   };
 
+  // "Нові" — усе, що ще не прийнято адміном; "Виконані" — прийняте (approved)
+  const ACTIVE_STATUSES = ['new', 'pending_review', 'rescheduled'];
+  const DONE_STATUSES = ['approved'];
+
   document.getElementById('heading').textContent = role === 'admin' ? 'Усі заявки' : 'Мої заявки';
+
+  let currentTab = 'active';
+  let allRequests = [];
 
   async function apiFetch(url) {
     const headers = {};
@@ -45,30 +87,51 @@
     return `request.html?${p.toString()}`;
   }
 
+  function renderList() {
+    const listEl = document.getElementById('list');
+    const statuses = currentTab === 'active' ? ACTIVE_STATUSES : DONE_STATUSES;
+    const filtered = allRequests.filter((r) => statuses.includes(r.status));
+
+    document.getElementById('countActive').textContent = allRequests.filter((r) => ACTIVE_STATUSES.includes(r.status)).length || '';
+    document.getElementById('countDone').textContent = allRequests.filter((r) => DONE_STATUSES.includes(r.status)).length || '';
+
+    if (!filtered.length) {
+      listEl.innerHTML = `<div class="empty">${currentTab === 'active' ? 'Нових заявок немає' : 'Виконаних заявок ще немає'}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = filtered
+      .map((r) => {
+        const timeStr = r.timeFrom ? `з ${r.timeFrom}${r.timeTo ? ' до ' + r.timeTo : ''}` : '';
+        return `
+      <a class="card-list-item" style="text-decoration:none;color:inherit" href="${requestUrl(r.id)}">
+        <div>
+          <div class="title">Завдання №${r.taskId}</div>
+          <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}${timeStr ? ' · ' + timeStr : ''}</div>
+        </div>
+        <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
+      </a>`;
+      })
+      .join('');
+  }
+
+  document.querySelectorAll('.tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
+      tab.classList.add('active');
+      currentTab = tab.dataset.tab;
+      renderList();
+    });
+  });
+
   async function load() {
     const listEl = document.getElementById('list');
     let url = '/api/requests';
     if (role === 'executor' && executorId) url += `?executorId=${encodeURIComponent(executorId)}`;
 
     try {
-      const requests = await apiFetch(url);
-      if (!requests.length) {
-        listEl.innerHTML = '<div class="empty">Тут поки що порожньо</div>';
-        return;
-      }
-      listEl.innerHTML = requests
-        .map((r) => {
-          const timeStr = r.timeFrom ? `з ${r.timeFrom}${r.timeTo ? ' до ' + r.timeTo : ''}` : '';
-          return `
-        <a class="card-list-item" style="text-decoration:none;color:inherit" href="${requestUrl(r.id)}">
-          <div>
-            <div class="title">Завдання №${r.taskId}</div>
-            <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}${timeStr ? ' · ' + timeStr : ''}</div>
-          </div>
-          <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
-        </a>`;
-        })
-        .join('');
+      allRequests = await apiFetch(url);
+      renderList();
     } catch (err) {
       listEl.innerHTML = '<div class="empty">Не вдалося завантажити заявки</div>';
     }

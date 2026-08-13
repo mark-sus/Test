@@ -209,6 +209,10 @@
 
       ${additionalHtml}
 
+      <a class="btn secondary" href="chat.html?id=${r.id}&role=${role}" style="display:block; text-align:center; text-decoration:none; margin-top:10px;">
+        💬 ${role === 'admin' ? 'Чат з виконавцем' : 'Чат з адміністратором'}
+      </a>
+
       ${actionsHtml}
     `;
 

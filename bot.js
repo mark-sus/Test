@@ -107,6 +107,30 @@ async function notifyExecutorReview(request, approved) {
   );
 }
 
+// Сповістити про нове повідомлення в чаті заявки
+async function notifyNewMessage(request, message) {
+  const chatUrl = (role) => `${PUBLIC_URL}/chat.html?id=${request.id}&role=${role}`;
+  if (message.role === 'executor') {
+    // повідомлення від виконавця -> сповістити всіх адмінів
+    for (const adminChatId of ADMIN_IDS) {
+      await bot.telegram.sendMessage(
+        adminChatId,
+        `💬 Нове повідомлення по заявці №${request.taskId} від ${message.authorName}:\n${message.text}`,
+        Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('admin'))])
+      );
+    }
+  } else {
+    // повідомлення від адміна -> сповістити виконавця
+    const executor = db.getExecutor(request.executorId);
+    if (!executor) return;
+    await bot.telegram.sendMessage(
+      executor.chatId,
+      `💬 Нове повідомлення по заявці №${request.taskId} від адміністратора:\n${message.text}`,
+      Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('executor'))])
+    );
+  }
+}
+
 module.exports = {
   bot,
   isAdmin,
@@ -115,4 +139,5 @@ module.exports = {
   notifyAdminsConfirmed,
   notifyAdminsRescheduled,
   notifyExecutorReview,
+  notifyNewMessage,
 };

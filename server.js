@@ -10,6 +10,7 @@ const {
   notifyAdminsConfirmed,
   notifyAdminsRescheduled,
   notifyExecutorReview,
+  notifyNewMessage,
 } = require('./bot');
 
 const PORT = process.env.PORT || 3000;
@@ -128,6 +129,29 @@ app.post('/api/requests/:id/reject', async (req, res) => {
   if (!request) return res.status(404).json({ error: 'not found' });
   try { await notifyExecutorReview(request, false); } catch (e) { console.error('[notify]', e.message); }
   res.json(request);
+});
+
+// ---------- API: чат по заявці ----------
+
+app.get('/api/requests/:id/messages', (req, res) => {
+  const request = db.getRequest(req.params.id);
+  if (!request) return res.status(404).json({ error: 'not found' });
+  res.json(db.listMessages(req.params.id));
+});
+
+app.post('/api/requests/:id/messages', async (req, res) => {
+  const request = db.getRequest(req.params.id);
+  if (!request) return res.status(404).json({ error: 'not found' });
+  const { role, authorName, text } = req.body;
+  if (!role || !['admin', 'executor'].includes(role)) return res.status(400).json({ error: 'invalid role' });
+  if (!text || !text.trim()) return res.status(400).json({ error: 'text required' });
+  const message = db.addMessage(req.params.id, { role, authorName, text: text.trim() });
+  try {
+    await notifyNewMessage(request, message);
+  } catch (e) {
+    console.error('[notify]', e.message);
+  }
+  res.json(message);
 });
 
 app.listen(PORT, () => {
