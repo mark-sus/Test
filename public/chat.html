@@ -99,6 +99,14 @@
   .chat-header { display: flex; align-items: center; gap: 10px; }
   .chat-header .back-btn { flex-shrink: 0; margin: 0; padding: 8px 10px; }
   .chat-header-text { flex: 1; min-width: 0; }
+  .bubble-img {
+    max-width: 100%;
+    border-radius: 10px;
+    display: block;
+    margin-bottom: 4px;
+    cursor: pointer;
+  }
+  #photoBtn { font-size: 20px; }
 </style>
 </head>
 <body>
@@ -111,6 +119,8 @@
   </div>
   <div class="chat-messages" id="messages"></div>
   <div class="chat-input">
+    <input type="file" id="photoInput" accept="image/*" style="display:none" />
+    <button type="button" id="photoBtn" title="Надіслати фото">📷</button>
     <textarea id="text" rows="1" placeholder="Написати повідомлення…"></textarea>
     <button id="sendBtn">➤</button>
   </div>
@@ -161,9 +171,14 @@
     el.innerHTML = messages
       .map((m) => {
         const own = m.role === role;
+        const img = m.photoUrl
+          ? `<img class="bubble-img" src="${esc(m.photoUrl)}" alt="фото" onclick="window.open('${esc(m.photoUrl)}', '_blank')" />`
+          : '';
+        const textHtml = m.text ? `<div>${esc(m.text)}</div>` : '';
         return `<div class="bubble ${own ? 'own' : 'other'}">
           <div class="author">${esc(m.authorName)}</div>
-          <div>${esc(m.text)}</div>
+          ${img}
+          ${textHtml}
           <div class="time">${formatTime(m.createdAt)}</div>
         </div>`;
       })
@@ -211,6 +226,37 @@
       alert(e.message || 'Не вдалося надіслати повідомлення');
     }
   }
+
+  async function sendPhoto(file) {
+    const textEl = document.getElementById('text');
+    const caption = textEl.value.trim();
+    textEl.value = '';
+    textEl.style.height = 'auto';
+    const formData = new FormData();
+    formData.append('photo', file);
+    formData.append('role', role);
+    formData.append('authorName', authorName);
+    if (caption) formData.append('text', caption);
+    try {
+      const headers = {};
+      if (tg?.initData) headers['X-Telegram-Init-Data'] = tg.initData;
+      const res = await fetch(`/api/requests/${id}/messages/photo`, { method: 'POST', headers, body: formData });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Помилка надсилання фото');
+      await poll();
+    } catch (e) {
+      alert(e.message || 'Не вдалося надіслати фото');
+    }
+  }
+
+  document.getElementById('photoBtn').addEventListener('click', () => {
+    document.getElementById('photoInput').click();
+  });
+  document.getElementById('photoInput').addEventListener('change', () => {
+    const input = document.getElementById('photoInput');
+    const file = input.files[0];
+    input.value = '';
+    if (file) sendPhoto(file);
+  });
 
   document.getElementById('sendBtn').addEventListener('click', send);
   document.getElementById('text').addEventListener('keydown', (e) => {

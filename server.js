@@ -1,6 +1,8 @@
 require('dotenv').config();
 const crypto = require('crypto');
+const fs = require('fs');
 const express = require('express');
+const multer = require('multer');
 const path = require('path');
 const db = require('./db');
 const {
@@ -11,14 +13,39 @@ const {
   notifyAdminsRescheduled,
   notifyExecutorReview,
   notifyNewMessage,
+  getExecutorAvatarUrl,
 } = require('./bot');
 
 const PORT = process.env.PORT || 3000;
 const VERIFY_INIT_DATA = process.env.VERIFY_INIT_DATA === 'true';
+const PUBLIC_URL = process.env.PUBLIC_URL || '';
+
+// Каталог для фото, надісланих у чаті заявки (винесіть на постійний диск через UPLOADS_DIR,
+// щоб фото не зникали при передеплої, так само як DATA_DIR для data.json)
+const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname || '').slice(0, 8) || '.jpg';
+      cb(null, `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`);
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype || !file.mimetype.startsWith('image/')) {
+      return cb(new Error('Дозволені лише зображення'));
+    }
+    cb(null, true);
+  },
+});
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 // ---------- (опційна) перевірка підпису Telegram WebApp initData ----------
 // Документація: https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
@@ -66,9 +93,31 @@ function getChatIdFromReq(req) {
 app.get('/api/executors', (req, res) => {
   const executors = db.listExecutors().map((e) => ({
     id: e.id,
+    firstName: e.firstName || '',
+    lastName: e.lastName || '',
+    username: e.username || '',
+    pending: !e.chatId, // ще не натискав /start у боті
     name: [e.firstName, e.lastName].filter(Boolean).join(' ') || e.username || e.chatId,
   }));
   res.json(executors);
+});
+
+// Аватар виконавця (проксі до Telegram, бо клієнту не можна віддавати токен бота)
+app.get('/api/executors/:id/avatar', async (req, res) => {
+  try {
+    const executor = db.getExecutor(req.params.id);
+    if (!executor || !executor.chatId) return res.status(404).end();
+    const url = await getExecutorAvatarUrl(executor.chatId);
+    if (!url) return res.status(404).end();
+    const r = await fetch(url);
+    if (!r.ok) return res.status(404).end();
+    res.set('Content-Type', r.headers.get('content-type') || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=600');
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.send(buf);
+  } catch (err) {
+    res.status(404).end();
+  }
 });
 
 // ---------- API: заявки ----------
@@ -188,6 +237,31 @@ app.post('/api/requests/:id/messages', async (req, res) => {
     console.error('[notify]', e.message);
   }
   res.json(message);
+});
+
+// Надіслати фото в чат заявки (опційно з підписом у полі text)
+app.post('/api/requests/:id/messages/photo', (req, res) => {
+  upload.single('photo')(req, res, async (uploadErr) => {
+    if (uploadErr) return res.status(400).json({ error: uploadErr.message || 'Помилка завантаження фото' });
+    try {
+      const request = db.getRequest(req.params.id);
+      if (!request) return res.status(404).json({ error: 'not found' });
+      const { role, authorName, text } = req.body;
+      if (!role || !['admin', 'executor'].includes(role)) return res.status(400).json({ error: 'invalid role' });
+      if (!req.file) return res.status(400).json({ error: 'photo required' });
+      const photoUrl = `${PUBLIC_URL}/uploads/${req.file.filename}`;
+      const message = db.addMessage(req.params.id, { role, authorName, text: (text || '').trim(), photoUrl });
+      try {
+        await notifyNewMessage(request, message);
+      } catch (e) {
+        console.error('[notify]', e.message);
+      }
+      res.json(message);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: 'server error' });
+    }
+  });
 });
 
 // ---------- API: налаштування сповіщень ----------

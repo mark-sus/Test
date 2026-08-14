@@ -93,6 +93,36 @@
     border: 1px dashed rgba(0,0,0,0.2); background: none;
     color: var(--link); font-weight: 700; font-size: 14px; cursor: pointer;
   }
+
+  .required-mark { color: var(--accent-red, #e05252); margin-left: 2px; }
+
+  .executor-list { display: flex; flex-direction: column; gap: 8px; }
+  .executor-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius);
+    background: var(--bg);
+    border: 2px solid rgba(0,0,0,0.08);
+    cursor: pointer;
+  }
+  .executor-item.selected { border-color: var(--button); background: rgba(36,129,204,0.08); }
+  .executor-avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    object-fit: cover; background: var(--secondary-bg); flex-shrink: 0;
+  }
+  .executor-avatar-fallback {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--secondary-bg); color: var(--hint);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700; flex-shrink: 0;
+  }
+  .executor-info { min-width: 0; }
+  .executor-name { font-weight: 600; font-size: 14.5px; }
+  .executor-username { font-size: 12.5px; color: var(--hint); }
+  .executor-pending { font-size: 11px; color: var(--accent-amber, #f0a020); margin-top: 2px; }
+  .executor-empty-hint { font-size: 13px; color: var(--hint); padding: 8px 2px; }
 </style>
 </head>
 <body>
@@ -102,9 +132,9 @@
   <div class="hidden-fields-bar" id="hiddenFieldsBar"></div>
 
   <form id="form">
-    <div class="field" data-label="ID завдання">
-      <label>ID завдання</label>
-      <input type="text" id="taskId" placeholder="2261523605" />
+    <div class="field" data-label="ID завдання" data-locked="true">
+      <label>ID завдання<span class="required-mark">*</span></label>
+      <input type="text" id="taskId" placeholder="2261523605" required />
     </div>
 
     <div class="row-2">
@@ -118,9 +148,9 @@
       </div>
     </div>
 
-    <div class="field" data-label="ID наряда">
-      <label>ID наряда</label>
-      <input type="text" id="orderId" placeholder="1261471523" />
+    <div class="field" data-label="ID наряда" data-locked="true">
+      <label>ID наряда<span class="required-mark">*</span></label>
+      <input type="text" id="orderId" placeholder="1261471523" required />
     </div>
 
     <div class="field" data-label="Технологія">
@@ -180,15 +210,15 @@
       <button type="button" class="btn secondary" id="locateBtn">📍 Моє місцезнаходження</button>
     </div>
 
-    <div class="field" data-label="Місто" style="margin-top:14px;">
-      <label>Місто</label>
-      <input type="text" id="city" value="Звягель" />
+    <div class="field" data-label="Місто" data-locked="true" style="margin-top:14px;">
+      <label>Місто<span class="required-mark">*</span></label>
+      <input type="text" id="city" value="Звягель" required />
     </div>
 
     <div class="row-2">
-      <div class="field" data-label="Вулиця, будинок">
-        <label>Вулиця, будинок</label>
-        <input type="text" id="street" placeholder="Мамайчука 17" />
+      <div class="field" data-label="Вулиця, будинок" data-locked="true">
+        <label>Вулиця, будинок<span class="required-mark">*</span></label>
+        <input type="text" id="street" placeholder="Мамайчука 17" required />
       </div>
       <div class="field" data-label="Кв. / під'їзд">
         <label>Кв. / під'їзд</label>
@@ -229,10 +259,12 @@
     <button type="button" class="add-info-btn" id="addInfoBtn">+ Додаткова інформація</button>
 
     <div class="section-title">Виконавець</div>
-    <div class="field" data-label="Виконавець">
-      <select id="executorId">
-        <option value="">Без виконавця (без сповіщення)</option>
-      </select>
+    <div class="field" data-label="Виконавець" data-locked="true">
+      <label>Виконавець<span class="required-mark">*</span></label>
+      <div class="executor-list" id="executorList">
+        <div class="executor-empty-hint">Завантаження…</div>
+      </div>
+      <input type="hidden" id="executorId" />
     </div>
 
     <button type="submit" class="btn">Створити заявку</button>
@@ -300,7 +332,7 @@
     fieldEl.appendChild(btn);
   }
 
-  document.querySelectorAll('.field[data-label]').forEach(makeRemovable);
+  document.querySelectorAll('.field[data-label]:not([data-locked])').forEach(makeRemovable);
 
   function fieldVisible(el) {
     return el.closest('.field') ? el.closest('.field').style.display !== 'none' : true;
@@ -470,18 +502,42 @@
   }
 
   // ---------- Виконавці ----------
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
   async function loadExecutors() {
-    const select = document.getElementById('executorId');
+    const listEl = document.getElementById('executorList');
     try {
       const executors = await apiFetch('/api/executors');
-      executors.forEach((e) => {
-        const opt = document.createElement('option');
-        opt.value = e.id;
-        opt.textContent = e.name;
-        select.appendChild(opt);
+      if (!executors.length) {
+        listEl.innerHTML = '<div class="executor-empty-hint">Немає доданих виконавців. Додайте через бота кнопкою «➕ Додати виконавця».</div>';
+        return;
+      }
+      listEl.innerHTML = executors
+        .map((e) => {
+          const initial = (e.firstName || e.username || '?').trim().charAt(0).toUpperCase();
+          return `
+        <div class="executor-item" data-id="${e.id}">
+          <img class="executor-avatar" src="/api/executors/${e.id}/avatar" alt=""
+               onerror="this.outerHTML='<div class=&quot;executor-avatar-fallback&quot;>${initial}</div>'" />
+          <div class="executor-info">
+            <div class="executor-name">${esc(e.firstName)} ${esc(e.lastName)}</div>
+            ${e.username ? `<div class="executor-username">@${esc(e.username)}</div>` : ''}
+            ${e.pending ? '<div class="executor-pending">⏳ ще не запускав бота</div>' : ''}
+          </div>
+        </div>`;
+        })
+        .join('');
+      listEl.querySelectorAll('.executor-item').forEach((item) => {
+        item.addEventListener('click', () => {
+          listEl.querySelectorAll('.executor-item').forEach((i) => i.classList.remove('selected'));
+          item.classList.add('selected');
+          document.getElementById('executorId').value = item.dataset.id;
+        });
       });
     } catch (err) {
-      showToast('Не вдалося завантажити виконавців');
+      listEl.innerHTML = '<div class="executor-empty-hint">Не вдалося завантажити виконавців</div>';
     }
   }
   loadExecutors();
@@ -496,6 +552,12 @@
   // ---------- Сабміт ----------
   document.getElementById('form').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    if (!val('taskId')) return showToast('Вкажіть ID завдання');
+    if (!val('orderId')) return showToast('Вкажіть ID наряда');
+    if (!val('city') || !val('street')) return showToast('Вкажіть Місто та Вулицю');
+    if (!document.getElementById('executorId').value) return showToast('Оберіть виконавця');
+
     const payload = {
       taskId: val('taskId'),
       timeFrom: val('timeFrom'),
@@ -517,12 +579,12 @@
       tkdAddress: val('tkdAddress'),
       tkd: val('tkd'),
       additionalInfo: collectAdditionalInfo(),
-      executorId: fieldVisible(document.getElementById('executorId')) ? document.getElementById('executorId').value : '',
+      executorId: document.getElementById('executorId').value,
     };
 
     try {
       await apiFetch('/api/requests', { method: 'POST', body: JSON.stringify(payload) });
-      showToast(payload.executorId ? 'Заявку створено та надіслано виконавцю ✅' : 'Заявку створено (без виконавця) ✅');
+      showToast('Заявку створено та надіслано виконавцю ✅');
       document.getElementById('form').reset();
       document.getElementById('city').value = 'Звягель';
       document.getElementById('timeFrom').value = '11:00';
@@ -531,6 +593,8 @@
       if (marker) { map.removeLayer(marker); marker = null; }
       document.getElementById('lat').value = '';
       document.getElementById('lng').value = '';
+      document.getElementById('executorId').value = '';
+      document.querySelectorAll('.executor-item.selected').forEach((i) => i.classList.remove('selected'));
     } catch (err) {
       showToast(err.message || 'Помилка створення заявки');
     }
