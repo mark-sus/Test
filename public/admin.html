@@ -123,6 +123,33 @@
   .executor-username { font-size: 12.5px; color: var(--hint); }
   .executor-pending { font-size: 11px; color: var(--accent-amber, #f0a020); margin-top: 2px; }
   .executor-empty-hint { font-size: 13px; color: var(--hint); padding: 8px 2px; }
+
+  .time-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: -4px 0 14px; }
+  .time-chip {
+    border: 1px solid rgba(0,0,0,0.12);
+    background: var(--secondary-bg);
+    color: var(--text);
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: transform 0.1s ease, opacity 0.15s ease;
+  }
+  .time-chip:active { transform: scale(0.97); opacity: 0.85; }
+  .time-chip.active { background: var(--button); color: var(--button-text); border-color: var(--button); }
+  .time-chip.urgent { border-color: rgba(224,82,82,0.4); color: var(--accent-red, #e05252); }
+  .time-chip.urgent.active { background: var(--accent-red, #e05252); color: #fff; border-color: var(--accent-red, #e05252); }
+
+  .dup-warning {
+    display: none;
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--accent-red, #e05252);
+    margin-top: 6px;
+  }
+  .dup-warning.show { display: block; }
+  .dup-warning a { color: inherit; text-decoration: underline; }
 </style>
 </head>
 <body>
@@ -135,6 +162,7 @@
     <div class="field" data-label="ID завдання" data-locked="true">
       <label>ID завдання<span class="required-mark">*</span></label>
       <input type="text" id="taskId" placeholder="2261523605" required />
+      <div class="dup-warning" id="taskIdWarning"></div>
     </div>
 
     <div class="row-2">
@@ -148,9 +176,16 @@
       </div>
     </div>
 
+    <div class="time-chips" id="timeChips">
+      <button type="button" class="time-chip" data-slot="morning">Перша половина дня (9:00–13:00)</button>
+      <button type="button" class="time-chip" data-slot="afternoon">Друга половина дня (13:00–18:00)</button>
+      <button type="button" class="time-chip urgent" data-slot="urgent">⚡ Терміново</button>
+    </div>
+
     <div class="field" data-label="ID наряда" data-locked="true">
       <label>ID наряда<span class="required-mark">*</span></label>
       <input type="text" id="orderId" placeholder="1261471523" required />
+      <div class="dup-warning" id="orderIdWarning"></div>
     </div>
 
     <div class="field" data-label="Технологія">
@@ -300,6 +335,84 @@
   }
 
   AppCommon.renderNotifToggle(topBar, apiFetch);
+
+  // ---------- Маска телефону +380 (XX) XXX-XX-XX ----------
+  ['homePhone', 'mobilePhone', 'phone'].forEach((id) => AppCommon.attachPhoneMask(document.getElementById(id)));
+
+  // ---------- Швидкий вибір часового слоту ----------
+  const timeChips = document.querySelectorAll('#timeChips .time-chip');
+  const timeFromInput = document.getElementById('timeFrom');
+  const timeToInput = document.getElementById('timeTo');
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  timeChips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      const slot = chip.dataset.slot;
+      if (slot === 'morning') {
+        timeFromInput.value = '09:00';
+        timeToInput.value = '13:00';
+      } else if (slot === 'afternoon') {
+        timeFromInput.value = '13:00';
+        timeToInput.value = '18:00';
+      } else if (slot === 'urgent') {
+        const now = new Date();
+        const end = new Date(now.getTime() + 60 * 60 * 1000);
+        timeFromInput.value = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+        timeToInput.value = `${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+      }
+      timeChips.forEach((c) => c.classList.remove('active'));
+      chip.classList.add('active');
+    });
+  });
+
+  // Якщо користувач вручну змінює час — знімаємо виділення з чипів, щоб не вводити в оману
+  [timeFromInput, timeToInput].forEach((input) => {
+    input.addEventListener('input', () => timeChips.forEach((c) => c.classList.remove('active')));
+  });
+
+  // ---------- Перевірка дублікатів ID завдання / ID наряда ----------
+  const taskIdInput = document.getElementById('taskId');
+  const orderIdInput = document.getElementById('orderId');
+  const taskIdWarning = document.getElementById('taskIdWarning');
+  const orderIdWarning = document.getElementById('orderIdWarning');
+  let dupTimer = null;
+
+  function hideWarning(el) {
+    el.classList.remove('show');
+    el.innerHTML = '';
+  }
+
+  function showWarning(el, label, value, info) {
+    el.innerHTML = `⚠️ Заявка з ${esc(label)} «${esc(value)}» вже існує — <a href="request.html?id=${encodeURIComponent(info.id)}&role=admin" target="_blank" rel="noopener">переглянути</a>`;
+    el.classList.add('show');
+  }
+
+  async function checkDuplicates() {
+    const taskId = taskIdInput.value.trim();
+    const orderId = orderIdInput.value.trim();
+    hideWarning(taskIdWarning);
+    hideWarning(orderIdWarning);
+    if (!taskId && !orderId) return;
+    const params = new URLSearchParams();
+    if (taskId) params.set('taskId', taskId);
+    if (orderId) params.set('orderId', orderId);
+    try {
+      const result = await apiFetch(`/api/requests/check-duplicate?${params.toString()}`);
+      if (result.taskId) showWarning(taskIdWarning, 'ID завдання', taskId, result.taskId);
+      if (result.orderId) showWarning(orderIdWarning, 'ID наряда', orderId, result.orderId);
+    } catch (e) {
+      // перевірка дублікатів не критична — мовчки ігноруємо помилку мережі
+    }
+  }
+
+  function scheduleDupCheck() {
+    clearTimeout(dupTimer);
+    dupTimer = setTimeout(checkDuplicates, 500);
+  }
+
+  taskIdInput.addEventListener('input', scheduleDupCheck);
+  orderIdInput.addEventListener('input', scheduleDupCheck);
 
   // ---------- Прибрати поле (зробити необов'язковим / не заповнювати) ----------
   const hiddenBar = document.getElementById('hiddenFieldsBar');
@@ -558,6 +671,10 @@
     if (!val('city') || !val('street')) return showToast('Вкажіть Місто та Вулицю');
     if (!document.getElementById('executorId').value) return showToast('Оберіть виконавця');
 
+    if (taskIdWarning.classList.contains('show') || orderIdWarning.classList.contains('show')) {
+      if (!confirm('Схоже, заявка з таким ID вже існує в системі. Все одно створити нову?')) return;
+    }
+
     const payload = {
       taskId: val('taskId'),
       timeFrom: val('timeFrom'),
@@ -595,6 +712,9 @@
       document.getElementById('lng').value = '';
       document.getElementById('executorId').value = '';
       document.querySelectorAll('.executor-item.selected').forEach((i) => i.classList.remove('selected'));
+      timeChips.forEach((c) => c.classList.remove('active'));
+      hideWarning(taskIdWarning);
+      hideWarning(orderIdWarning);
     } catch (err) {
       showToast(err.message || 'Помилка створення заявки');
     }
@@ -602,3 +722,4 @@
 </script>
 </body>
 </html>
+

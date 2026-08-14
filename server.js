@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const crypto = require('crypto');
 const fs = require('fs');
@@ -139,6 +140,21 @@ app.post('/api/requests', async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'server error' });
   }
+});
+
+// Перевірка дублікатів ID завдання / ID наряда під час заповнення форми створення заявки
+app.get('/api/requests/check-duplicate', (req, res) => {
+  const { taskId, orderId } = req.query;
+  const result = {};
+  if (taskId) {
+    const existing = db.findRequestByTaskId(taskId);
+    if (existing) result.taskId = { id: existing.id, status: existing.status };
+  }
+  if (orderId) {
+    const existing = db.findRequestByOrderId(orderId);
+    if (existing) result.orderId = { id: existing.id, status: existing.status };
+  }
+  res.json(result);
 });
 
 app.get('/api/requests', (req, res) => {

@@ -177,6 +177,17 @@ function getRequest(id) {
   return db.get('requests').find({ id }).value();
 }
 
+// Пошук існуючої заявки за ID завдання / ID наряда (для перевірки дублікатів у формі створення)
+function findRequestByTaskId(taskId) {
+  if (!taskId) return null;
+  return db.get('requests').find({ taskId: String(taskId) }).value() || null;
+}
+
+function findRequestByOrderId(orderId) {
+  if (!orderId) return null;
+  return db.get('requests').find({ orderId: String(orderId) }).value() || null;
+}
+
 function updateRequest(id, patch) {
   db.get('requests')
     .find({ id })
@@ -243,6 +254,8 @@ module.exports = {
   listRequestsForExecutor,
   listAllRequests,
   getRequest,
+  findRequestByTaskId,
+  findRequestByOrderId,
   updateRequest,
   deleteRequest,
   addMessage,
@@ -250,3 +263,4 @@ module.exports = {
   getNotificationsEnabled,
   setNotificationsEnabled,
 };
+
