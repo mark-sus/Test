@@ -38,6 +38,7 @@
 </head>
 <body>
 <div class="screen">
+  <div class="top-bar" id="topBar"></div>
   <h1 id="heading">Мої заявки</h1>
 
   <div class="tabs">
@@ -48,6 +49,7 @@
   <div id="list"></div>
 </div>
 
+<script src="common.js"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   tg?.ready();
@@ -56,6 +58,11 @@
   const params = new URLSearchParams(location.search);
   const role = params.get('role') || 'executor';
   const executorId = params.get('executorId') || '';
+
+  const topBar = document.getElementById('topBar');
+  const backTarget = role === 'admin' ? 'admin.html' : null;
+  topBar.appendChild(AppCommon.renderBackButton(backTarget));
+  AppCommon.initTelegramBackButton(backTarget);
 
   const statusLabels = {
     new: 'Нова',
@@ -73,17 +80,20 @@
   let currentTab = 'active';
   let allRequests = [];
 
-  async function apiFetch(url) {
-    const headers = {};
+  async function apiFetch(url, options = {}) {
+    const headers = options.headers || {};
     if (tg?.initData) headers['X-Telegram-Init-Data'] = tg.initData;
-    const res = await fetch(url, { headers });
-    if (!res.ok) throw new Error('Помилка запиту');
+    const res = await fetch(url, { ...options, headers: { 'Content-Type': 'application/json', ...headers } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Помилка запиту');
     return res.json();
   }
+
+  AppCommon.renderNotifToggle(topBar, apiFetch);
 
   function requestUrl(id) {
     const p = new URLSearchParams({ id });
     if (role === 'admin') p.set('role', 'admin');
+    else if (executorId) p.set('executorId', executorId);
     return `request.html?${p.toString()}`;
   }
 

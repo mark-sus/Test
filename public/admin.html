@@ -97,6 +97,7 @@
 </head>
 <body>
 <div class="screen">
+  <div class="top-bar" id="topBar"></div>
   <h1>Нова заявка</h1>
   <div class="hidden-fields-bar" id="hiddenFieldsBar"></div>
 
@@ -241,10 +242,15 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="common.js"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   tg?.ready();
   tg?.expand();
+
+  const topBar = document.getElementById('topBar');
+  topBar.appendChild(AppCommon.renderBackButton('requests.html?role=admin'));
+  AppCommon.initTelegramBackButton('requests.html?role=admin');
 
   function showToast(msg) {
     const t = document.getElementById('toast');
@@ -260,6 +266,8 @@
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Помилка запиту');
     return res.json();
   }
+
+  AppCommon.renderNotifToggle(topBar, apiFetch);
 
   // ---------- Прибрати поле (зробити необов'язковим / не заповнювати) ----------
   const hiddenBar = document.getElementById('hiddenFieldsBar');

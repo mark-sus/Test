@@ -18,6 +18,16 @@ function isAdmin(chatId) {
   return ADMIN_IDS.includes(String(chatId));
 }
 
+// Надсилає повідомлення лише якщо отримувач не вимкнув сповіщення
+async function sendIfEnabled(chatId, text, extra) {
+  if (!db.getNotificationsEnabled(chatId)) return;
+  try {
+    await bot.telegram.sendMessage(chatId, text, extra);
+  } catch (err) {
+    console.error(`[bot] не вдалося надіслати повідомлення ${chatId}:`, err.message);
+  }
+}
+
 bot.start(async (ctx) => {
   const chatId = ctx.chat.id;
   const from = ctx.from;
@@ -54,56 +64,67 @@ function dbExecutorId(chatId) {
   return ex ? ex.id : '';
 }
 
-// Відправити виконавцю сповіщення про нову заявку з кнопкою відкрити деталі
-async function notifyExecutorNewRequest(request) {
-  const executor = db.getExecutor(request.executorId);
-  if (!executor) return;
-  const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
+function requestSummary(request) {
   const timeStr = request.timeFrom ? `\nЧас: з ${request.timeFrom}${request.timeTo ? ' до ' + request.timeTo : ''}` : '';
-  await bot.telegram.sendMessage(
-    executor.chatId,
-    `🆕 Нова заявка №${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв./під. ' + request.apt : ''}`,
-    Markup.inlineKeyboard([Markup.button.webApp('Відкрити заявку', url)])
-  );
+  return `№${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв./під. ' + request.apt : ''}`;
+}
+
+// Відправити сповіщення про нову заявку: конкретному виконавцю, або всім, якщо виконавця не обрано
+async function notifyExecutorNewRequest(request) {
+  const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
+  const extra = Markup.inlineKeyboard([Markup.button.webApp('Відкрити заявку', url)]);
+
+  if (request.executorId) {
+    const executor = db.getExecutor(request.executorId);
+    if (!executor) return;
+    await sendIfEnabled(executor.chatId, `🆕 Нова заявка ${requestSummary(request)}`, extra);
+    return;
+  }
+
+  // Заявка без виконавця — доступна всім, сповіщаємо кожного
+  const executors = db.listExecutors();
+  for (const executor of executors) {
+    await sendIfEnabled(executor.chatId, `🆕 Нова заявка (для всіх) ${requestSummary(request)}`, extra);
+  }
 }
 
 // Сповістити всіх адмінів, що виконавець підтвердив заявку (на перевірку)
 async function notifyAdminsConfirmed(request) {
   const url = `${PUBLIC_URL}/request.html?id=${request.id}&role=admin`;
+  const extra = Markup.inlineKeyboard([Markup.button.webApp('Перевірити', url)]);
   for (const adminChatId of ADMIN_IDS) {
-    await bot.telegram.sendMessage(
-      adminChatId,
-      `✅ Заявку №${request.taskId} виконано, очікує на перевірку.`,
-      Markup.inlineKeyboard([Markup.button.webApp('Перевірити', url)])
-    );
+    await sendIfEnabled(adminChatId, `✅ Заявку №${request.taskId} виконано, очікує на перевірку.`, extra);
   }
 }
 
 // Сповістити адмінів, що виконавець переніс заявку
 async function notifyAdminsRescheduled(request) {
   const url = `${PUBLIC_URL}/request.html?id=${request.id}&role=admin`;
+  const extra = Markup.inlineKeyboard([Markup.button.webApp('Деталі', url)]);
   for (const adminChatId of ADMIN_IDS) {
-    await bot.telegram.sendMessage(
+    await sendIfEnabled(
       adminChatId,
       `📅 Заявку №${request.taskId} перенесено на ${request.rescheduleDate}.${
         request.rescheduleComment ? '\nКоментар: ' + request.rescheduleComment : ''
       }`,
-      Markup.inlineKeyboard([Markup.button.webApp('Деталі', url)])
+      extra
     );
   }
 }
 
 // Сповістити виконавця, що адмін підтвердив/повернув заявку на доопрацювання
 async function notifyExecutorReview(request, approved) {
+  if (!request.executorId) return; // заявка була для всіх — нема кого сповіщати персонально
   const executor = db.getExecutor(request.executorId);
   if (!executor) return;
   const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
-  await bot.telegram.sendMessage(
+  const extra = Markup.inlineKeyboard([Markup.button.webApp('Відкрити', url)]);
+  await sendIfEnabled(
     executor.chatId,
     approved
       ? `🎉 Заявку №${request.taskId} прийнято адміністратором.`
       : `↩️ Заявку №${request.taskId} повернено на доопрацювання.`,
-    Markup.inlineKeyboard([Markup.button.webApp('Відкрити', url)])
+    extra
   );
 }
 
@@ -111,23 +132,16 @@ async function notifyExecutorReview(request, approved) {
 async function notifyNewMessage(request, message) {
   const chatUrl = (role) => `${PUBLIC_URL}/chat.html?id=${request.id}&role=${role}`;
   if (message.role === 'executor') {
-    // повідомлення від виконавця -> сповістити всіх адмінів
+    const extra = Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('admin'))]);
     for (const adminChatId of ADMIN_IDS) {
-      await bot.telegram.sendMessage(
-        adminChatId,
-        `💬 Нове повідомлення по заявці №${request.taskId} від ${message.authorName}:\n${message.text}`,
-        Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('admin'))])
-      );
+      await sendIfEnabled(adminChatId, `💬 Нове повідомлення по заявці №${request.taskId} від ${message.authorName}:\n${message.text}`, extra);
     }
   } else {
-    // повідомлення від адміна -> сповістити виконавця
+    if (!request.executorId) return;
     const executor = db.getExecutor(request.executorId);
     if (!executor) return;
-    await bot.telegram.sendMessage(
-      executor.chatId,
-      `💬 Нове повідомлення по заявці №${request.taskId} від адміністратора:\n${message.text}`,
-      Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('executor'))])
-    );
+    const extra = Markup.inlineKeyboard([Markup.button.webApp('Відповісти', chatUrl('executor'))]);
+    await sendIfEnabled(executor.chatId, `💬 Нове повідомлення по заявці №${request.taskId} від адміністратора:\n${message.text}`, extra);
   }
 }
 

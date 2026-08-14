@@ -1,12 +1,20 @@
 const low = require('lowdb');
 const FileSync = require('lowdb/adapters/FileSync');
 const path = require('path');
+const fs = require('fs');
 const { nanoid } = require('nanoid');
 
-const adapter = new FileSync(path.join(__dirname, 'data.json'));
+// DATA_DIR дозволяє винести data.json на постійний диск (наприклад, Railway Volume),
+// щоб заявки НЕ зникали при кожному передеплої/перезапуску контейнера.
+// Якщо DATA_DIR не задано — файл лежить поруч зі скриптом (тоді дані живуть лише
+// до наступного деплою на платформах з ефемерною файловою системою).
+const DATA_DIR = process.env.DATA_DIR || __dirname;
+if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+
+const adapter = new FileSync(path.join(DATA_DIR, 'data.json'));
 const db = low(adapter);
 
-db.defaults({ executors: [], requests: [], messages: [] }).write();
+db.defaults({ executors: [], requests: [], messages: [], settings: [] }).write();
 
 // ---------- Виконавці ----------
 
@@ -57,7 +65,7 @@ function createRequest(data) {
     mobilePhone: data.mobilePhone || '',
     phone: data.phone || '', // робочий телефон
     city: data.city || 'Звягель',
-    street: data.street,
+    street: data.street || '',
     apt: data.apt || '',
     lat: data.lat || null,
     lng: data.lng || null,
@@ -73,7 +81,7 @@ function createRequest(data) {
             copyable: !!item.copyable,
           }))
       : [],
-    executorId: data.executorId || '',
+    executorId: data.executorId || '', // порожньо = заявка для всіх виконавців
     status: 'new', // new -> pending_review -> approved | rescheduled
     rescheduleDate: null,
     rescheduleComment: null,
@@ -84,8 +92,9 @@ function createRequest(data) {
   return request;
 }
 
+// Заявки без призначеного виконавця бачать УСІ виконавці (як загальний пул)
 function listRequestsForExecutor(executorId, status) {
-  let q = db.get('requests').filter({ executorId });
+  let q = db.get('requests').filter((r) => !r.executorId || r.executorId === executorId);
   if (status) q = q.filter({ status });
   return q.orderBy(['createdAt'], ['desc']).value();
 }
@@ -108,6 +117,13 @@ function updateRequest(id, patch) {
   return getRequest(id);
 }
 
+function deleteRequest(id) {
+  const existed = !!getRequest(id);
+  db.get('requests').remove({ id }).write();
+  db.get('messages').remove({ requestId: id }).write();
+  return existed;
+}
+
 // ---------- Чат по заявці ----------
 
 function addMessage(requestId, { role, authorName, text }) {
@@ -127,6 +143,24 @@ function listMessages(requestId) {
   return db.get('messages').filter({ requestId }).orderBy(['createdAt'], ['asc']).value();
 }
 
+// ---------- Налаштування сповіщень (на chatId, окремо для адмінів і виконавців) ----------
+
+function getNotificationsEnabled(chatId) {
+  const s = db.get('settings').find({ chatId: String(chatId) }).value();
+  return s ? s.notificationsEnabled !== false : true; // за замовчуванням увімкнено
+}
+
+function setNotificationsEnabled(chatId, enabled) {
+  const key = String(chatId);
+  const existing = db.get('settings').find({ chatId: key }).value();
+  if (existing) {
+    db.get('settings').find({ chatId: key }).assign({ notificationsEnabled: !!enabled }).write();
+  } else {
+    db.get('settings').push({ chatId: key, notificationsEnabled: !!enabled }).write();
+  }
+  return getNotificationsEnabled(key);
+}
+
 module.exports = {
   upsertExecutor,
   listExecutors,
@@ -136,6 +170,9 @@ module.exports = {
   listAllRequests,
   getRequest,
   updateRequest,
+  deleteRequest,
   addMessage,
   listMessages,
+  getNotificationsEnabled,
+  setNotificationsEnabled,
 };

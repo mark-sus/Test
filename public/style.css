@@ -187,3 +187,55 @@ h1 {
   text-decoration: none;
   white-space: nowrap;
 }
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+  background: none;
+  color: var(--link);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 6px 4px 6px 0;
+  cursor: pointer;
+}
+
+.notif-toggle {
+  border: none;
+  background: var(--secondary-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.notif-toggle.muted {
+  background: rgba(224,82,82,0.12);
+  color: var(--accent-red, #e05252);
+}
+
+.delete-btn {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(224,82,82,0.3);
+  background: none;
+  color: var(--accent-red, #e05252);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  margin-top: 10px;
+}

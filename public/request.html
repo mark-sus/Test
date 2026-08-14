@@ -30,12 +30,14 @@
 </head>
 <body>
 <div class="screen">
+  <div class="top-bar" id="topBar"></div>
   <h1>Заявка <span id="taskIdHeading"></span></h1>
   <div id="content"></div>
 </div>
 
 <div class="toast" id="toast"></div>
 
+<script src="common.js"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   tg?.ready();
@@ -44,6 +46,12 @@
   const params = new URLSearchParams(location.search);
   const id = params.get('id');
   const role = params.get('role') || 'executor';
+  const viewerExecutorId = params.get('executorId') || '';
+
+  const backTarget = role === 'admin' ? 'requests.html?role=admin' : `requests.html?role=executor&executorId=${encodeURIComponent(viewerExecutorId)}`;
+  const topBar = document.getElementById('topBar');
+  topBar.appendChild(AppCommon.renderBackButton(backTarget));
+  AppCommon.initTelegramBackButton(backTarget);
 
   const statusLabels = {
     new: 'Нова',
@@ -66,6 +74,8 @@
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Помилка запиту');
     return res.json();
   }
+
+  AppCommon.renderNotifToggle(topBar, apiFetch);
 
   function copyText(text, label) {
     navigator.clipboard?.writeText(text).then(
@@ -105,15 +115,20 @@
 
     let actionsHtml = '';
 
+    // Заявка без виконавця — будь-хто з виконавців може взяти її в роботу
+    if (role !== 'admin' && !r.executorId) {
+      actionsHtml += `<button class="btn" id="claimBtn">🙋 Взяти заявку в роботу</button>`;
+    }
+
     if (role === 'admin') {
       if (r.status === 'pending_review') {
-        actionsHtml = `
+        actionsHtml += `
           <button class="btn" id="approveBtn">Прийняти виконання</button>
           <button class="btn secondary" id="rejectBtn">Повернути на доопрацювання</button>`;
       }
-    } else {
+    } else if (r.executorId) {
       if (r.status === 'new') {
-        actionsHtml = `
+        actionsHtml += `
           <button class="btn" id="confirmBtn">Підтвердити виконання</button>
           <button class="btn secondary" id="rescheduleBtn">Перенести на інший день</button>
           <div class="card" id="rescheduleForm" style="display:none; margin-top:10px;">
@@ -128,7 +143,7 @@
             <button class="btn danger" id="rescheduleSubmit">Підтвердити перенесення</button>
           </div>`;
       } else if (r.status === 'rescheduled') {
-        actionsHtml = `<div class="card"><div class="kv"><span class="k">Перенесено на</span><span class="v">${esc(r.rescheduleDate)}</span></div>${
+        actionsHtml += `<div class="card"><div class="kv"><span class="k">Перенесено на</span><span class="v">${esc(r.rescheduleDate)}</span></div>${
           r.rescheduleComment ? `<div class="kv"><span class="k">Коментар</span><span class="v">${esc(r.rescheduleComment)}</span></div>` : ''
         }</div>`;
       }
@@ -184,7 +199,7 @@
         ${copyRow('ID клієнта', r.clientId)}
         ${plainRow("Ім'я клієнта", r.clientName)}
         ${plainRow('Електронна пошта', r.email)}
-        ${r.executorName ? `<div class="kv"><span class="k">Виконавець</span><span class="v">${esc(r.executorName)}</span></div>` : ''}
+        ${r.executorName ? `<div class="kv"><span class="k">Виконавець</span><span class="v">${esc(r.executorName)}</span></div>` : (!r.executorId ? '<div class="kv"><span class="k">Виконавець</span><span class="v">Для всіх виконавців</span></div>' : '')}
       </div>
 
       <div class="card">
@@ -209,15 +224,41 @@
 
       ${additionalHtml}
 
-      <a class="btn secondary" href="chat.html?id=${r.id}&role=${role}" style="display:block; text-align:center; text-decoration:none; margin-top:10px;">
+      <a class="btn secondary" href="chat.html?id=${r.id}&role=${role}${role !== 'admin' && viewerExecutorId ? '&executorId=' + encodeURIComponent(viewerExecutorId) : ''}" style="display:block; text-align:center; text-decoration:none; margin-top:10px;">
         💬 ${role === 'admin' ? 'Чат з виконавцем' : 'Чат з адміністратором'}
       </a>
 
       ${actionsHtml}
+
+      ${role === 'admin' ? '<button class="btn danger" id="deleteBtn" style="margin-top:18px;">🗑 Видалити заявку</button>' : ''}
     `;
 
     document.querySelectorAll('.copy-btn').forEach((btn) => {
       btn.addEventListener('click', () => copyText(btn.dataset.copy, btn.dataset.label));
+    });
+
+    document.getElementById('claimBtn')?.addEventListener('click', async () => {
+      if (!viewerExecutorId) {
+        showToast('Відкрийте заявку зі списку «Мої заявки», щоб взяти її в роботу');
+        return;
+      }
+      try {
+        await apiFetch(`/api/requests/${r.id}/claim`, {
+          method: 'POST',
+          body: JSON.stringify({ executorId: viewerExecutorId }),
+        });
+        showToast('Заявку взято в роботу ✅');
+        load();
+      } catch (e) { showToast(e.message); }
+    });
+
+    document.getElementById('deleteBtn')?.addEventListener('click', async () => {
+      if (!confirm(`Видалити заявку №${r.taskId}? Цю дію не можна скасувати.`)) return;
+      try {
+        await apiFetch(`/api/requests/${r.id}`, { method: 'DELETE' });
+        showToast('Заявку видалено');
+        setTimeout(() => AppCommon.goBack('requests.html?role=admin'), 600);
+      } catch (e) { showToast(e.message); }
     });
 
     if (role === 'admin') {

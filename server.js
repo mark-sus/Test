@@ -48,6 +48,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Дістає chat_id користувача Telegram WebApp з initData (для перевірки, чи це адмін)
+function getChatIdFromReq(req) {
+  const initData = req.header('X-Telegram-Init-Data');
+  if (!initData) return null;
+  try {
+    const params = new URLSearchParams(initData);
+    const user = JSON.parse(params.get('user') || '{}');
+    return user.id ? String(user.id) : null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- API: виконавці ----------
 
 app.get('/api/executors', (req, res) => {
@@ -130,6 +143,30 @@ app.post('/api/requests/:id/reject', async (req, res) => {
   res.json(request);
 });
 
+// Адмін видаляє заявку
+app.delete('/api/requests/:id', (req, res) => {
+  const chatId = getChatIdFromReq(req);
+  if (VERIFY_INIT_DATA && (!chatId || !isAdmin(chatId))) {
+    return res.status(403).json({ error: 'лише адміністратор може видаляти заявки' });
+  }
+  const deleted = db.deleteRequest(req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'not found' });
+  res.json({ ok: true });
+});
+
+// Виконавець бере в роботу заявку без призначеного виконавця
+app.post('/api/requests/:id/claim', (req, res) => {
+  const { executorId } = req.body;
+  if (!executorId) return res.status(400).json({ error: 'executorId required' });
+  const existing = db.getRequest(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (existing.executorId && existing.executorId !== executorId) {
+    return res.status(409).json({ error: 'заявку вже взяв інший виконавець' });
+  }
+  const request = db.updateRequest(req.params.id, { executorId });
+  res.json(request);
+});
+
 // ---------- API: чат по заявці ----------
 
 app.get('/api/requests/:id/messages', (req, res) => {
@@ -151,6 +188,18 @@ app.post('/api/requests/:id/messages', async (req, res) => {
     console.error('[notify]', e.message);
   }
   res.json(message);
+});
+
+// ---------- API: налаштування сповіщень ----------
+
+app.get('/api/settings/:chatId', (req, res) => {
+  res.json({ notificationsEnabled: db.getNotificationsEnabled(req.params.chatId) });
+});
+
+app.post('/api/settings/:chatId', (req, res) => {
+  const { notificationsEnabled } = req.body;
+  const value = db.setNotificationsEnabled(req.params.chatId, !!notificationsEnabled);
+  res.json({ notificationsEnabled: value });
 });
 
 app.listen(PORT, () => {

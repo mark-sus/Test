@@ -96,13 +96,18 @@
     cursor: pointer;
   }
   .chat-empty { text-align: center; color: var(--hint); padding: 40px 20px; font-size: 14px; }
+  .chat-header { display: flex; align-items: center; gap: 10px; }
+  .chat-header .back-btn { flex-shrink: 0; margin: 0; padding: 8px 10px; }
+  .chat-header-text { flex: 1; min-width: 0; }
 </style>
 </head>
 <body>
 <div class="chat-screen">
-  <div class="chat-header">
-    <h1>💬 Чат по заявці <span id="taskIdHeading"></span></h1>
-    <div class="sub" id="sub"></div>
+  <div class="chat-header" id="chatHeader">
+    <div class="chat-header-text">
+      <h1>💬 Чат по заявці <span id="taskIdHeading"></span></h1>
+      <div class="sub" id="sub"></div>
+    </div>
   </div>
   <div class="chat-messages" id="messages"></div>
   <div class="chat-input">
@@ -111,6 +116,7 @@
   </div>
 </div>
 
+<script src="common.js"></script>
 <script>
   const tg = window.Telegram?.WebApp;
   tg?.ready();
@@ -119,6 +125,12 @@
   const params = new URLSearchParams(location.search);
   const id = params.get('id');
   const role = params.get('role') === 'admin' ? 'admin' : 'executor';
+  const viewerExecutorId = params.get('executorId') || '';
+
+  const backTarget = `request.html?id=${id}&role=${role}${role !== 'admin' && viewerExecutorId ? '&executorId=' + encodeURIComponent(viewerExecutorId) : ''}`;
+  const chatHeader = document.getElementById('chatHeader');
+  chatHeader.prepend(AppCommon.renderBackButton(backTarget));
+  AppCommon.initTelegramBackButton(backTarget);
 
   async function apiFetch(url, options = {}) {
     const headers = options.headers || {};
