@@ -4,10 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const { nanoid } = require('nanoid');
 
-// DATA_DIR дозволяє винести data.json на постійний диск (наприклад, Railway Volume),
-// щоб заявки НЕ зникали при кожному передеплої/перезапуску контейнера.
-// Якщо DATA_DIR не задано — файл лежить поруч зі скриптом (тоді дані живуть лише
-// до наступного деплою на платформах з ефемерною файловою системою).
+
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -16,14 +13,6 @@ const db = low(adapter);
 
 db.defaults({ executors: [], requests: [], messages: [], settings: [] }).write();
 
-// ---------- Виконавці ----------
-//
-// Виконавця може додати лише адміністратор (через бота): надіславши юзернейм
-// (@username) або контакт, і вказавши Ім'я та Прізвище. Якщо доданий за
-// юзернеймом — запис створюється як "очікує" (chatId порожній) і стає активним,
-// щойно ця людина сама натисне /start у боті (тоді юзернейм зіставляється).
-// Якщо доданий через контакт з відомим user_id — запис одразу активний.
-// Звичайні (не додані адміном) користувачі виконавцями НЕ стають.
 
 function getExecutor(id) {
   return db.get('executors').find({ id }).value();
@@ -43,17 +32,17 @@ function findExecutorByUsername(username) {
     .value();
 }
 
-// Усі виконавці, доданих адміністратором (і активні з відомим chatId, і ті, що ще очікують на /start)
+
 function listExecutors() {
   return db.get('executors').filter({ active: true }).value();
 }
 
-// Лише ті, кому реально можна надіслати повідомлення (уже запускали бота)
+
 function listReachableExecutors() {
   return listExecutors().filter((e) => !!e.chatId);
 }
 
-// Адмін додає виконавця за юзернеймом — запис "очікує", доки людина сама не натисне /start
+
 function addPendingExecutorByUsername({ username, firstName, lastName }) {
   const uname = String(username).replace(/^@/, '').trim();
   const existing = findExecutorByUsername(uname);
@@ -77,7 +66,7 @@ function addPendingExecutorByUsername({ username, firstName, lastName }) {
   return executor;
 }
 
-// Адмін додає виконавця через надісланий контакт (одразу відомий chatId)
+
 function addExecutorFromContact({ chatId, username, firstName, lastName }) {
   const existing = getExecutorByChatId(chatId);
   if (existing) {
@@ -105,7 +94,7 @@ function addExecutorFromContact({ chatId, username, firstName, lastName }) {
   return executor;
 }
 
-// Активує заздалегідь доданого (за юзернеймом) виконавця, коли той сам запускає бота
+
 function activatePendingExecutorByUsername(username, chatId, liveUsername) {
   const pending = findExecutorByUsername(username);
   if (!pending || pending.chatId) return null;
@@ -116,7 +105,7 @@ function activatePendingExecutorByUsername(username, chatId, liveUsername) {
   return getExecutor(pending.id);
 }
 
-// ---------- Заявки ----------
+
 
 function createRequest(data) {
   const request = {
@@ -131,7 +120,7 @@ function createRequest(data) {
     clientName: data.clientName || '',
     homePhone: data.homePhone || '',
     mobilePhone: data.mobilePhone || '',
-    phone: data.phone || '', // робочий телефон
+    phone: data.phone || '', 
     city: data.city || 'Звягель',
     street: data.street || '',
     apt: data.apt || '',
@@ -149,8 +138,8 @@ function createRequest(data) {
             copyable: !!item.copyable,
           }))
       : [],
-    executorId: data.executorId || '', // порожньо = заявка для всіх виконавців
-    status: 'new', // new -> pending_review -> approved | rescheduled
+    executorId: data.executorId || '', 
+    status: 'new',
     rescheduleDate: null,
     rescheduleComment: null,
     createdAt: new Date().toISOString(),
@@ -160,7 +149,7 @@ function createRequest(data) {
   return request;
 }
 
-// Заявки без призначеного виконавця бачать УСІ виконавці (як загальний пул)
+
 function listRequestsForExecutor(executorId, status) {
   let q = db.get('requests').filter((r) => !r.executorId || r.executorId === executorId);
   if (status) q = q.filter({ status });
@@ -177,7 +166,7 @@ function getRequest(id) {
   return db.get('requests').find({ id }).value();
 }
 
-// Пошук існуючої заявки за ID завдання / ID наряда (для перевірки дублікатів у формі створення)
+
 function findRequestByTaskId(taskId) {
   if (!taskId) return null;
   return db.get('requests').find({ taskId: String(taskId) }).value() || null;
@@ -209,7 +198,7 @@ function addMessage(requestId, { role, authorName, text, photoUrl }) {
   const message = {
     id: nanoid(10),
     requestId,
-    role, // 'admin' | 'executor'
+    role, 
     authorName: authorName || (role === 'admin' ? 'Адміністратор' : 'Виконавець'),
     text: text || '',
     photoUrl: photoUrl || null,
@@ -223,11 +212,11 @@ function listMessages(requestId) {
   return db.get('messages').filter({ requestId }).orderBy(['createdAt'], ['asc']).value();
 }
 
-// ---------- Налаштування сповіщень (на chatId, окремо для адмінів і виконавців) ----------
+
 
 function getNotificationsEnabled(chatId) {
   const s = db.get('settings').find({ chatId: String(chatId) }).value();
-  return s ? s.notificationsEnabled !== false : true; // за замовчуванням увімкнено
+  return s ? s.notificationsEnabled !== false : true; 
 }
 
 function setNotificationsEnabled(chatId, enabled) {

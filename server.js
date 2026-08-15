@@ -21,8 +21,8 @@ const PORT = process.env.PORT || 3000;
 const VERIFY_INIT_DATA = process.env.VERIFY_INIT_DATA === 'true';
 const PUBLIC_URL = process.env.PUBLIC_URL || '';
 
-// Каталог для фото, надісланих у чаті заявки (винесіть на постійний диск через UPLOADS_DIR,
-// щоб фото не зникали при передеплої, так само як DATA_DIR для data.json)
+// Каталог для фото, надісланих у чаті заявки
+
 const UPLOADS_DIR = process.env.UPLOADS_DIR || path.join(__dirname, 'uploads');
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -48,7 +48,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOADS_DIR));
 
-// ---------- (опційна) перевірка підпису Telegram WebApp initData ----------
+// перевірка підпису Telegram WebApp initData 
 // Документація: https://core.telegram.org/bots/webapps#validating-data-received-via-the-web-app
 function verifyInitData(initData) {
   if (!VERIFY_INIT_DATA) return true;
@@ -69,14 +69,14 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) {
     const initData = req.header('X-Telegram-Init-Data');
     if (!verifyInitData(initData)) {
-      // У режимі розробки (VERIFY_INIT_DATA=false) пропускаємо без перевірки
       if (VERIFY_INIT_DATA) return res.status(401).json({ error: 'invalid init data' });
     }
   }
   next();
 });
 
-// Дістає chat_id користувача Telegram WebApp з initData (для перевірки, чи це адмін)
+// Дістає chat_id користувача
+
 function getChatIdFromReq(req) {
   const initData = req.header('X-Telegram-Init-Data');
   if (!initData) return null;
@@ -103,7 +103,7 @@ app.get('/api/executors', (req, res) => {
   res.json(executors);
 });
 
-// Аватар виконавця (проксі до Telegram, бо клієнту не можна віддавати токен бота)
+// Аватар виконавця
 app.get('/api/executors/:id/avatar', async (req, res) => {
   try {
     const executor = db.getExecutor(req.params.id);
@@ -192,7 +192,7 @@ app.post('/api/requests/:id/reschedule', async (req, res) => {
   res.json(request);
 });
 
-// Адмін підтверджує (закриває) заявку після перевірки
+// Адмін підтверджує заявку після перевірки
 app.post('/api/requests/:id/approve', async (req, res) => {
   const request = db.updateRequest(req.params.id, { status: 'approved' });
   if (!request) return res.status(404).json({ error: 'not found' });
@@ -255,7 +255,7 @@ app.post('/api/requests/:id/messages', async (req, res) => {
   res.json(message);
 });
 
-// Надіслати фото в чат заявки (опційно з підписом у полі text)
+// Надіслати фото в чат заявки
 app.post('/api/requests/:id/messages/photo', (req, res) => {
   upload.single('photo')(req, res, async (uploadErr) => {
     if (uploadErr) return res.status(400).json({ error: uploadErr.message || 'Помилка завантаження фото' });

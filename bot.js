@@ -18,7 +18,7 @@ function isAdmin(chatId) {
   return ADMIN_IDS.includes(String(chatId));
 }
 
-// Надсилає повідомлення лише якщо отримувач не вимкнув сповіщення
+
 async function sendIfEnabled(chatId, text, extra) {
   if (!db.getNotificationsEnabled(chatId)) return;
   try {
@@ -49,12 +49,11 @@ bot.start(async (ctx) => {
     return;
   }
 
-  // Виконавцем може стати лише той, кого попередньо додав адміністратор (за юзернеймом або контактом)
+
   const activated = db.activatePendingExecutorByUsername(from.username, chatId, from.username || '');
   const existing = activated || db.getExecutorByChatId(chatId);
 
   if (!existing) {
-    // Звичайний, не доданий адміном акаунт — бот не реагує
     return;
   }
 
@@ -70,8 +69,7 @@ function dbExecutorId(chatId) {
 }
 
 // ---------- Додавання виконавців адміном ----------
-// Стан для покрокового діалогу: адмін надсилає юзернейм/контакт, потім Ім'я Прізвище
-const pendingAdminAdd = new Map(); // adminChatId -> { username?, contact? }
+const pendingAdminAdd = new Map();
 
 function parseFullName(text) {
   const parts = String(text).trim().split(/\s+/).filter(Boolean);
@@ -123,11 +121,10 @@ bot.on('contact', async (ctx) => {
 
 bot.on('text', async (ctx) => {
   const chatId = ctx.chat.id;
-  if (!isAdmin(chatId)) return; // звичайні акаунти — бот не реагує на довільний текст
+  if (!isAdmin(chatId)) return; 
   const text = ctx.message.text.trim();
   if (text.startsWith('/') || text === '➕ Додати виконавця') return;
 
-  // Формат в одне повідомлення: "@username Ім'я Прізвище"
   const oneShot = text.match(/^@([a-zA-Z0-9_]{5,32})\s+(.+)$/);
   if (oneShot) {
     const name = parseFullName(oneShot[2]);
@@ -140,7 +137,6 @@ bot.on('text', async (ctx) => {
 
   const pending = pendingAdminAdd.get(chatId);
 
-  // Крок 1: очікуємо юзернейм (після натискання кнопки "Додати виконавця")
   if (pending && !pending.username && !pending.contact) {
     if (text.startsWith('@') && text.length > 1) {
       pendingAdminAdd.set(chatId, { username: text.slice(1) });
@@ -151,7 +147,6 @@ bot.on('text', async (ctx) => {
     return;
   }
 
-  // Крок 2: очікуємо Ім'я Прізвище
   if (pending && (pending.username || pending.contact)) {
     const name = parseFullName(text);
     if (!name || !name.lastName) {
@@ -163,14 +158,12 @@ bot.on('text', async (ctx) => {
     return;
   }
 
-  // Юзернейм окремим повідомленням без попереднього натискання кнопки
   if (text.startsWith('@') && text.length > 1) {
     pendingAdminAdd.set(chatId, { username: text.slice(1) });
     await ctx.reply("Введіть Ім'я та Прізвище виконавця (наприклад: Іван Петренко).");
   }
 });
 
-// ---------- Аватар виконавця (для списку вибору в панелі адміна) ----------
 const avatarCache = new Map(); // chatId -> { url, expiresAt }
 const AVATAR_TTL_MS = 10 * 60 * 1000;
 
@@ -201,7 +194,6 @@ function requestSummary(request) {
   return `№${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв./під. ' + request.apt : ''}`;
 }
 
-// Відправити сповіщення про нову заявку: конкретному виконавцю, або всім, якщо виконавця не обрано
 async function notifyExecutorNewRequest(request) {
   const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
   const extra = Markup.inlineKeyboard([Markup.button.webApp('Відкрити заявку', url)]);
@@ -213,14 +205,14 @@ async function notifyExecutorNewRequest(request) {
     return;
   }
 
-  // Заявка без виконавця — доступна всім, сповіщаємо кожного (кому вже можна писати)
+
   const executors = db.listReachableExecutors();
   for (const executor of executors) {
     await sendIfEnabled(executor.chatId, `🆕 Нова заявка (для всіх) ${requestSummary(request)}`, extra);
   }
 }
 
-// Сповістити всіх адмінів, що виконавець підтвердив заявку (на перевірку)
+
 async function notifyAdminsConfirmed(request) {
   const url = `${PUBLIC_URL}/request.html?id=${request.id}&role=admin`;
   const extra = Markup.inlineKeyboard([Markup.button.webApp('Перевірити', url)]);
@@ -229,7 +221,7 @@ async function notifyAdminsConfirmed(request) {
   }
 }
 
-// Сповістити адмінів, що виконавець переніс заявку
+
 async function notifyAdminsRescheduled(request) {
   const url = `${PUBLIC_URL}/request.html?id=${request.id}&role=admin`;
   const extra = Markup.inlineKeyboard([Markup.button.webApp('Деталі', url)]);
@@ -244,7 +236,7 @@ async function notifyAdminsRescheduled(request) {
   }
 }
 
-// Сповістити виконавця, що адмін підтвердив/повернув заявку на доопрацювання
+
 async function notifyExecutorReview(request, approved) {
   if (!request.executorId) return; // заявка була для всіх — нема кого сповіщати персонально
   const executor = db.getExecutor(request.executorId);
@@ -260,7 +252,7 @@ async function notifyExecutorReview(request, approved) {
   );
 }
 
-// Надсилає сповіщення про нове повідомлення в чаті (текст або фото) з урахуванням налаштувань сповіщень
+
 async function sendMessageNotification(chatId, request, message, replyRole, fromLabel) {
   if (!db.getNotificationsEnabled(chatId)) return;
   const chatUrl = `${PUBLIC_URL}/chat.html?id=${request.id}&role=${replyRole}`;
@@ -277,7 +269,7 @@ async function sendMessageNotification(chatId, request, message, replyRole, from
   }
 }
 
-// Сповістити про нове повідомлення в чаті заявки
+
 async function notifyNewMessage(request, message) {
   if (message.role === 'executor') {
     for (const adminChatId of ADMIN_IDS) {
