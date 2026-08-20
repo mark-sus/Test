@@ -150,6 +150,21 @@
   }
   .dup-warning.show { display: block; }
   .dup-warning a { color: inherit; text-decoration: underline; }
+
+  .auto-hint { font-size: 12px; color: var(--hint); margin: -6px 0 10px; }
+  .building-panel {
+    display: none;
+    background: var(--secondary-bg);
+    border-radius: var(--radius);
+    padding: 12px;
+    margin: -2px 0 14px;
+  }
+  .building-panel.show { display: block; }
+  .building-panel .row-2 { margin-bottom: 10px; }
+  .building-panel .field { margin-bottom: 10px; }
+  .building-panel-title { font-size: 13.5px; font-weight: 700; margin-bottom: 10px; }
+  .building-panel-actions { display: flex; gap: 8px; }
+  .building-panel-actions .btn, .building-panel-actions .btn.secondary { flex: 1; margin-top: 0; padding: 10px; font-size: 13.5px; }
 </style>
 </head>
 <body>
@@ -253,13 +268,56 @@
     <div class="row-2">
       <div class="field" data-label="Вулиця, будинок" data-locked="true">
         <label>Вулиця, будинок<span class="required-mark">*</span></label>
-        <input type="text" id="street" placeholder="Вулиця 10" required />
+        <input type="text" id="street" list="streetOptions" placeholder="Вулиця 10" required autocomplete="off" />
+        <datalist id="streetOptions"></datalist>
       </div>
-      <div class="field" data-label="Кв. / під'їзд">
-        <label>Кв. / під'їзд</label>
+      <div class="field" data-label="Квартира">
+        <label>Квартира</label>
         <input type="text" id="apt" placeholder="1" />
       </div>
     </div>
+
+    <button type="button" class="btn secondary" id="addBuildingBtn" style="margin-top:2px;">🏢 Додати будинок у базу</button>
+
+    <div class="building-panel" id="buildingPanel">
+      <div class="building-panel-title" id="buildingPanelTitle">Новий будинок</div>
+      <div class="row-2">
+        <div class="field">
+          <label>Під'їздів</label>
+          <input type="number" id="bEntrances" min="1" value="1" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>Поверхів у під'їзді</label>
+          <input type="number" id="bFloors" min="1" value="5" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="row-2">
+        <div class="field">
+          <label>Квартир на поверсі</label>
+          <input type="number" id="bAptsPerFloor" min="1" value="4" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>Перша квартира №</label>
+          <input type="number" id="bStartApt" min="1" value="1" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="building-panel-actions">
+        <button type="button" class="btn secondary" id="cancelBuildingBtn">Скасувати</button>
+        <button type="button" class="btn" id="saveBuildingBtn">Зберегти будинок</button>
+      </div>
+    </div>
+
+    <div class="row-2">
+      <div class="field" data-label="Під'їзд">
+        <label>Під'їзд</label>
+        <input type="text" id="entrance" placeholder="—" />
+      </div>
+      <div class="field" data-label="Поверх">
+        <label>Поверх</label>
+        <input type="text" id="floor" placeholder="—" />
+      </div>
+    </div>
+    <div class="auto-hint" id="autoHint">Якщо будинок є в базі — поверх і під'їзд визначаться самі за номером квартири</div>
 
     <button type="button" class="btn secondary" id="geocodeBtn" style="margin-top:2px;">🔍 Знайти на мапі за адресою</button>
 
@@ -577,6 +635,125 @@
 
   setTimeout(() => map.invalidateSize(), 300);
 
+  // ---------- Будинки: база під'їздів/поверхів для автопідстановки ----------
+  const cityInput = document.getElementById('city');
+  const streetInput = document.getElementById('street');
+  const aptInput = document.getElementById('apt');
+  const entranceInput = document.getElementById('entrance');
+  const floorInput = document.getElementById('floor');
+  const streetOptions = document.getElementById('streetOptions');
+  const autoHint = document.getElementById('autoHint');
+
+  let buildingsCache = [];
+  let lastAutoFill = { entrance: '', floor: '' }; // щоб не затирати ручні правки користувача
+
+  async function loadBuildingsForCity() {
+    const city = cityInput.value.trim();
+    if (!city) { buildingsCache = []; streetOptions.innerHTML = ''; return; }
+    try {
+      buildingsCache = await apiFetch(`/api/buildings?city=${encodeURIComponent(city)}`);
+      streetOptions.innerHTML = buildingsCache.map((b) => `<option value="${esc(b.street)}"></option>`).join('');
+    } catch (e) {
+      // не критично — просто без автопідказок
+    }
+  }
+
+  function findCachedBuilding() {
+    const street = streetInput.value.trim().toLowerCase();
+    return buildingsCache.find((b) => b.street.trim().toLowerCase() === street) || null;
+  }
+
+  async function lookupFloorEntrance() {
+    const city = cityInput.value.trim();
+    const street = streetInput.value.trim();
+    const apt = aptInput.value.trim();
+    if (!city || !street || !apt) return;
+    try {
+      const result = await apiFetch(`/api/buildings/lookup?city=${encodeURIComponent(city)}&street=${encodeURIComponent(street)}&apt=${encodeURIComponent(apt)}`);
+      if (result.found && result.floor) {
+        // заповнюємо, тільки якщо користувач не вписав щось своє поверх автозаповненого
+        if (entranceInput.value === lastAutoFill.entrance) entranceInput.value = result.entrance;
+        if (floorInput.value === lastAutoFill.floor) floorInput.value = result.floor;
+        lastAutoFill = { entrance: String(result.entrance), floor: String(result.floor) };
+        autoHint.textContent = `Визначено автоматично: під'їзд ${result.entrance}, поверх ${result.floor}`;
+      } else if (result.found && result.outOfRange) {
+        autoHint.textContent = 'Такого номера квартири немає в цьому будинку — перевірте номер або впишіть під\'їзд/поверх вручну';
+      } else {
+        autoHint.textContent = 'Будинку немає в базі — можна додати його або вписати під\'їзд/поверх вручну';
+      }
+    } catch (e) {
+      // мовчки ігноруємо — це лише зручність, не критична функція
+    }
+  }
+
+  let lookupTimer = null;
+  function scheduleLookup() {
+    clearTimeout(lookupTimer);
+    lookupTimer = setTimeout(lookupFloorEntrance, 400);
+  }
+
+  cityInput.addEventListener('change', () => { loadBuildingsForCity(); scheduleLookup(); });
+  streetInput.addEventListener('input', scheduleLookup);
+  streetInput.addEventListener('change', scheduleLookup);
+  aptInput.addEventListener('input', scheduleLookup);
+  loadBuildingsForCity();
+
+  // ---------- Панель додавання будинку ----------
+  const buildingPanel = document.getElementById('buildingPanel');
+  const addBuildingBtn = document.getElementById('addBuildingBtn');
+  const cancelBuildingBtn = document.getElementById('cancelBuildingBtn');
+  const saveBuildingBtn = document.getElementById('saveBuildingBtn');
+  const buildingPanelTitle = document.getElementById('buildingPanelTitle');
+
+  addBuildingBtn.addEventListener('click', () => {
+    const city = cityInput.value.trim();
+    const street = streetInput.value.trim();
+    if (!city || !street) return showToast('Спершу вкажіть місто та вулицю з номером будинку');
+    const existing = findCachedBuilding();
+    if (existing) {
+      buildingPanelTitle.textContent = `Редагувати будинок: ${street}`;
+      document.getElementById('bEntrances').value = existing.entrances;
+      document.getElementById('bFloors').value = existing.floors;
+      document.getElementById('bAptsPerFloor').value = existing.aptsPerFloor;
+      document.getElementById('bStartApt').value = existing.startApt;
+      saveBuildingBtn.dataset.editId = existing.id;
+    } else {
+      buildingPanelTitle.textContent = `Новий будинок: ${street}`;
+      delete saveBuildingBtn.dataset.editId;
+    }
+    buildingPanel.classList.add('show');
+  });
+
+  cancelBuildingBtn.addEventListener('click', () => buildingPanel.classList.remove('show'));
+
+  saveBuildingBtn.addEventListener('click', async () => {
+    const city = cityInput.value.trim();
+    const street = streetInput.value.trim();
+    if (!city || !street) return showToast('Спершу вкажіть місто та вулицю з номером будинку');
+    const payload = {
+      city,
+      street,
+      entrances: document.getElementById('bEntrances').value,
+      floors: document.getElementById('bFloors').value,
+      aptsPerFloor: document.getElementById('bAptsPerFloor').value,
+      startApt: document.getElementById('bStartApt').value,
+    };
+    try {
+      const editId = saveBuildingBtn.dataset.editId;
+      if (editId) {
+        await apiFetch(`/api/buildings/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+      } else {
+        await apiFetch('/api/buildings', { method: 'POST', body: JSON.stringify(payload) });
+      }
+      showToast('Будинок збережено ✅');
+      buildingPanel.classList.remove('show');
+      await loadBuildingsForCity();
+      lookupFloorEntrance();
+    } catch (err) {
+      showToast(err.message || 'Не вдалося зберегти будинок');
+    }
+  });
+
   // ---------- Додаткова інформація ----------
   let infoCounter = 0;
   function addInfoRow() {
@@ -690,6 +867,8 @@
       city: val('city'),
       street: val('street'),
       apt: val('apt'),
+      entrance: val('entrance'),
+      floor: val('floor'),
       lat: document.getElementById('lat').value || null,
       lng: document.getElementById('lng').value || null,
       port: getPort(),
@@ -711,6 +890,11 @@
       document.getElementById('lat').value = '';
       document.getElementById('lng').value = '';
       document.getElementById('executorId').value = '';
+      entranceInput.value = '';
+      floorInput.value = '';
+      lastAutoFill = { entrance: '', floor: '' };
+      autoHint.textContent = "Якщо будинок є в базі — поверх і під'їзд визначаться самі за номером квартири";
+      buildingPanel.classList.remove('show');
       document.querySelectorAll('.executor-item.selected').forEach((i) => i.classList.remove('selected'));
       timeChips.forEach((c) => c.classList.remove('active'));
       hideWarning(taskIdWarning);

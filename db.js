@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const adapter = new FileSync(path.join(DATA_DIR, 'data.json'));
 const db = low(adapter);
 
-db.defaults({ executors: [], requests: [], messages: [], settings: [] }).write();
+db.defaults({ executors: [], requests: [], messages: [], settings: [], buildings: [] }).write();
 
 
 function getExecutor(id) {
@@ -107,6 +107,81 @@ function activatePendingExecutorByUsername(username, chatId, liveUsername) {
 
 
 
+// ---------- Будинки (для автопідстановки поверху/під'їзду) ----------
+//
+// Нумерація квартир вважається послідовною по під'їздах: спочатку всі
+// квартири 1-го під'їзду (поверх за поверхом), потім 2-го і т.д.
+// Це стандартна схема для більшості багатоквартирних будинків.
+
+function normalizeStreet(s) {
+  return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function listBuildings(city) {
+  let q = db.get('buildings');
+  if (city) q = q.filter((b) => normalizeStreet(b.city) === normalizeStreet(city));
+  return q.orderBy(['street'], ['asc']).value();
+}
+
+function getBuilding(id) {
+  return db.get('buildings').find({ id }).value();
+}
+
+function findBuildingByStreet(city, street) {
+  const c = normalizeStreet(city);
+  const s = normalizeStreet(street);
+  if (!s) return null;
+  return (
+    db
+      .get('buildings')
+      .find((b) => normalizeStreet(b.city) === c && normalizeStreet(b.street) === s)
+      .value() || null
+  );
+}
+
+function createBuilding(data) {
+  const building = {
+    id: nanoid(8),
+    city: data.city || '',
+    street: data.street || '',
+    entrances: Math.max(1, parseInt(data.entrances, 10) || 1),
+    floors: Math.max(1, parseInt(data.floors, 10) || 1),
+    aptsPerFloor: Math.max(1, parseInt(data.aptsPerFloor, 10) || 1),
+    startApt: parseInt(data.startApt, 10) || 1,
+    createdAt: new Date().toISOString(),
+  };
+  db.get('buildings').push(building).write();
+  return building;
+}
+
+function updateBuilding(id, patch) {
+  db.get('buildings').find({ id }).assign(patch).write();
+  return getBuilding(id);
+}
+
+function deleteBuilding(id) {
+  const existed = !!getBuilding(id);
+  db.get('buildings').remove({ id }).write();
+  return existed;
+}
+
+// Обчислює поверх і під'їзд для номера квартири в даному будинку.
+// Повертає null, якщо номер квартири виходить за межі будинку.
+function computeAptLocation(building, aptRaw) {
+  if (!building) return null;
+  const apt = parseInt(String(aptRaw).replace(/\D/g, ''), 10);
+  if (!apt || isNaN(apt)) return null;
+  const start = building.startApt || 1;
+  const idx = apt - start;
+  if (idx < 0) return null;
+  const aptsPerEntrance = building.floors * building.aptsPerFloor;
+  const entrance = Math.floor(idx / aptsPerEntrance) + 1;
+  if (entrance > building.entrances) return null;
+  const rem = idx % aptsPerEntrance;
+  const floor = Math.floor(rem / building.aptsPerFloor) + 1;
+  return { floor, entrance };
+}
+
 function createRequest(data) {
   const request = {
     id: nanoid(10),
@@ -124,6 +199,8 @@ function createRequest(data) {
     city: data.city || 'Звягель',
     street: data.street || '',
     apt: data.apt || '',
+    floor: data.floor || '',
+    entrance: data.entrance || '',
     lat: data.lat || null,
     lng: data.lng || null,
     port: data.port || '',
@@ -239,6 +316,13 @@ module.exports = {
   addPendingExecutorByUsername,
   addExecutorFromContact,
   activatePendingExecutorByUsername,
+  listBuildings,
+  getBuilding,
+  findBuildingByStreet,
+  createBuilding,
+  updateBuilding,
+  deleteBuilding,
+  computeAptLocation,
   createRequest,
   listRequestsForExecutor,
   listAllRequests,

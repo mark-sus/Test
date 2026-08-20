@@ -113,11 +113,14 @@
     listEl.innerHTML = filtered
       .map((r) => {
         const timeStr = r.timeFrom ? `з ${r.timeFrom}${r.timeTo ? ' до ' + r.timeTo : ''}` : '';
+        const aptStr = r.apt ? ', кв. ' + r.apt : '';
+        const entranceStr = r.entrance ? ', ' + r.entrance + ' під.' : '';
+        const floorStr = r.floor ? ', ' + r.floor + ' пов.' : '';
         return `
       <a class="card-list-item" style="text-decoration:none;color:inherit" href="${requestUrl(r.id)}">
         <div>
           <div class="title">Завдання №${r.taskId}</div>
-          <div class="meta">${r.city}, ${r.street}${r.apt ? ', кв. ' + r.apt : ''}${timeStr ? ' · ' + timeStr : ''}</div>
+          <div class="meta">${r.city}, ${r.street}${aptStr}${entranceStr}${floorStr}${timeStr ? ' · ' + timeStr : ''}</div>
         </div>
         <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
       </a>`;

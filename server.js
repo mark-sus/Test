@@ -121,6 +121,52 @@ app.get('/api/executors/:id/avatar', async (req, res) => {
   }
 });
 
+// ---------- API: будинки (поверхи/під'їзди) ----------
+
+app.get('/api/buildings', (req, res) => {
+  res.json(db.listBuildings(req.query.city));
+});
+
+app.post('/api/buildings', (req, res) => {
+  const { city, street, entrances, floors, aptsPerFloor, startApt } = req.body;
+  if (!city || !street) return res.status(400).json({ error: 'Вкажіть місто та вулицю' });
+  const existing = db.findBuildingByStreet(city, street);
+  if (existing) return res.status(409).json({ error: 'Такий будинок вже є в базі', building: existing });
+  const building = db.createBuilding({ city, street, entrances, floors, aptsPerFloor, startApt });
+  res.json(building);
+});
+
+app.put('/api/buildings/:id', (req, res) => {
+  const { city, street, entrances, floors, aptsPerFloor, startApt } = req.body;
+  const building = db.updateBuilding(req.params.id, {
+    ...(city !== undefined && { city }),
+    ...(street !== undefined && { street }),
+    ...(entrances !== undefined && { entrances: Math.max(1, parseInt(entrances, 10) || 1) }),
+    ...(floors !== undefined && { floors: Math.max(1, parseInt(floors, 10) || 1) }),
+    ...(aptsPerFloor !== undefined && { aptsPerFloor: Math.max(1, parseInt(aptsPerFloor, 10) || 1) }),
+    ...(startApt !== undefined && { startApt: parseInt(startApt, 10) || 1 }),
+  });
+  if (!building) return res.status(404).json({ error: 'not found' });
+  res.json(building);
+});
+
+app.delete('/api/buildings/:id', (req, res) => {
+  const deleted = db.deleteBuilding(req.params.id);
+  if (!deleted) return res.status(404).json({ error: 'not found' });
+  res.json({ ok: true });
+});
+
+// Пошук поверху/під'їзду за адресою і номером квартири
+app.get('/api/buildings/lookup', (req, res) => {
+  const { city, street, apt } = req.query;
+  const building = db.findBuildingByStreet(city, street);
+  if (!building) return res.json({ found: false });
+  if (!apt) return res.json({ found: true, buildingId: building.id });
+  const loc = db.computeAptLocation(building, apt);
+  if (!loc) return res.json({ found: true, buildingId: building.id, outOfRange: true });
+  res.json({ found: true, buildingId: building.id, floor: loc.floor, entrance: loc.entrance });
+});
+
 // ---------- API: заявки ----------
 
 app.post('/api/requests', async (req, res) => {

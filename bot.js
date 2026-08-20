@@ -191,7 +191,10 @@ async function getExecutorAvatarUrl(chatId) {
 
 function requestSummary(request) {
   const timeStr = request.timeFrom ? `\nЧас: з ${request.timeFrom}${request.timeTo ? ' до ' + request.timeTo : ''}` : '';
-  return `№${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${request.apt ? ', кв./під. ' + request.apt : ''}`;
+  const aptStr = request.apt ? ', кв. ' + request.apt : '';
+  const entranceStr = request.entrance ? ', ' + request.entrance + ' під\'їзд' : '';
+  const floorStr = request.floor ? ', ' + request.floor + ' поверх' : '';
+  return `№${request.taskId}${timeStr}\nТехнологія: ${request.technology}\nАдреса: ${request.city}, ${request.street}${aptStr}${entranceStr}${floorStr}`;
 }
 
 async function notifyExecutorNewRequest(request) {
