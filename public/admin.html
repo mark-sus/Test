@@ -156,6 +156,12 @@
 <div class="screen">
   <div class="top-bar" id="topBar"></div>
   <h1>Нова заявка</h1>
+
+  <div class="tabs" id="typeTabs">
+    <div class="tab active" data-type="FTTB">🏢 FTTB</div>
+    <div class="tab" data-type="PON">📡 PON</div>
+  </div>
+
   <div class="hidden-fields-bar" id="hiddenFieldsBar"></div>
 
   <form id="form">
@@ -200,23 +206,25 @@
     </div>
 
     <div class="field" data-label="ID клієнта">
-      <label>ID клієнта</label>
+      <label id="clientIdLabelText">ID клієнта</label>
       <input type="text" id="clientId" placeholder="0000000000" />
     </div>
 
-    <div class="section-title">Клієнт</div>
+    <div class="section-title fttb-only" id="clientSectionTitle">Клієнт</div>
 
-    <div class="field" data-label="Ім'я">
-      <label>Ім'я</label>
-      <input type="text" id="clientName" placeholder="Ім'я Фамілія" />
+    <div class="fttb-only" id="clientNameEmailBlock">
+      <div class="field" data-label="Ім'я">
+        <label>Ім'я</label>
+        <input type="text" id="clientName" placeholder="Ім'я Фамілія" />
+      </div>
+
+      <div class="field" data-label="Електронна пошта">
+        <label>Електронна пошта</label>
+        <input type="email" id="email" placeholder="client@example.com" />
+      </div>
     </div>
 
-    <div class="field" data-label="Електронна пошта">
-      <label>Електронна пошта</label>
-      <input type="email" id="email" placeholder="client@example.com" />
-    </div>
-
-    <div class="row-2">
+    <div class="row-2 fttb-only" id="homeMobilePhoneRow">
       <div class="field" data-label="Домашній телефон">
         <label>Домашній телефон</label>
         <input type="tel" id="homePhone" placeholder="380000000000" />
@@ -228,7 +236,7 @@
     </div>
 
     <div class="field" data-label="Робочий телефон">
-      <label>Робочий телефон</label>
+      <label id="phoneLabelText">Робочий телефон</label>
       <input type="tel" id="phone" placeholder="+380000000000" />
     </div>
 
@@ -263,30 +271,32 @@
 
     <button type="button" class="btn secondary" id="geocodeBtn" style="margin-top:2px;">🔍 Знайти на мапі за адресою</button>
 
-    <div class="section-title">Технічні дані</div>
+    <div class="section-title fttb-only" id="techSectionTitle">Технічні дані</div>
 
-    <div class="field" data-label="Порт">
-      <label>Порт</label>
-      <div class="port-row">
-        <select id="portType">
-          <option value="">— не вказано —</option>
-          <option value="Ethernet">Ethernet</option>
-          <option value="Gigabit Ethernet">Gigabit Ethernet</option>
-        </select>
-        <select id="portNumber">
-          <option value="">№</option>
-        </select>
+    <div class="fttb-only" id="techDataBlock">
+      <div class="field" data-label="Порт">
+        <label>Порт</label>
+        <div class="port-row">
+          <select id="portType">
+            <option value="">— не вказано —</option>
+            <option value="Ethernet">Ethernet</option>
+            <option value="Gigabit Ethernet">Gigabit Ethernet</option>
+          </select>
+          <select id="portNumber">
+            <option value="">№</option>
+          </select>
+        </div>
       </div>
-    </div>
 
-    <div class="field" data-label="Адрес ТКД">
-      <label>Адрес ТКД</label>
-      <input type="text" id="tkdAddress" placeholder="............" />
-    </div>
+      <div class="field" data-label="Адрес ТКД">
+        <label>Адрес ТКД</label>
+        <input type="text" id="tkdAddress" placeholder="............" />
+      </div>
 
-    <div class="field" data-label="ТКД">
-      <label>ТКД</label>
-      <input type="text" id="tkd" placeholder="MDU_AAA00000_0000_0" />
+      <div class="field" data-label="ТКД">
+        <label>ТКД</label>
+        <input type="text" id="tkd" placeholder="MDU_AAA00000_0000_0" />
+      </div>
     </div>
 
     <div class="section-title">Додаткова інформація</div>
@@ -294,6 +304,9 @@
     <button type="button" class="add-info-btn" id="addInfoBtn">+ Додаткова інформація</button>
 
     <div class="section-title">Виконавець</div>
+    <div class="field" data-label="Пошук виконавця" data-locked="true">
+      <input type="text" id="executorSearch" placeholder="🔍 Пошук виконавця за іменем" />
+    </div>
     <div class="field" data-label="Виконавець" data-locked="true">
       <label>Виконавець<span class="required-mark">*</span></label>
       <div class="executor-list" id="executorList">
@@ -447,8 +460,9 @@
 
   document.querySelectorAll('.field[data-label]:not([data-locked])').forEach(makeRemovable);
 
+  // Перевіряємо реальну видимість поля (враховує й приховані батьківські блоки .fttb-only)
   function fieldVisible(el) {
-    return el.closest('.field') ? el.closest('.field').style.display !== 'none' : true;
+    return el.offsetParent !== null;
   }
 
   // ---------- Технологія: "Інше" ----------
@@ -462,6 +476,62 @@
     if (!fieldVisible(techSelect)) return '';
     return techSelect.value === '__custom' ? techCustom.value.trim() : techSelect.value;
   }
+
+  // ---------- Тип підключення: FTTB / PON ----------
+  const typeTabs = document.querySelectorAll('#typeTabs .tab');
+  let connectionType = 'FTTB';
+
+  const TECH_OPTIONS = {
+    FTTB: [
+      ['Абонентська аварія', 'Абонентська аварія'],
+      ['Абонентське Підключення', 'Абонентське Підключення'],
+      ['Послуга Майстер', 'Послуга Майстер'],
+      ['__custom', 'Інше…'],
+    ],
+    PON: [
+      ['Абонентське підключення', 'Абонентське підключення'],
+      ['Абонентська Аварія', 'Абонентська Аварія'],
+      ['__custom', 'Інше…'],
+    ],
+  };
+
+  function renderTechOptions(type) {
+    const prevValue = techSelect.value;
+    techSelect.innerHTML = TECH_OPTIONS[type]
+      .map(([value, label]) => `<option value="${value}">${label}</option>`)
+      .join('');
+    const stillExists = [...techSelect.options].some((o) => o.value === prevValue);
+    techSelect.value = stillExists ? prevValue : techSelect.options[0].value;
+    techCustom.style.display = techSelect.value === '__custom' ? 'block' : 'none';
+  }
+
+  function setConnectionType(type) {
+    connectionType = type;
+    typeTabs.forEach((t) => t.classList.toggle('active', t.dataset.type === type));
+
+    document.querySelectorAll('.fttb-only').forEach((el) => {
+      el.style.display = type === 'FTTB' ? '' : 'none';
+    });
+
+    renderTechOptions(type);
+
+    const clientIdInput = document.getElementById('clientId');
+    if (type === 'PON') {
+      document.getElementById('clientIdLabelText').textContent = 'Номер клієнта';
+      clientIdInput.placeholder = '123456789012';
+      document.getElementById('phoneLabelText').textContent = 'Номер телефону';
+    } else {
+      document.getElementById('clientIdLabelText').textContent = 'ID клієнта';
+      clientIdInput.placeholder = '0000000000';
+      document.getElementById('phoneLabelText').textContent = 'Робочий телефон';
+    }
+  }
+
+  typeTabs.forEach((tab) => {
+    tab.addEventListener('click', () => setConnectionType(tab.dataset.type));
+  });
+
+  setConnectionType('FTTB');
 
   // ---------- Порт: тип + номер 1-24 ----------
   const portNumberSelect = document.getElementById('portNumber');
@@ -619,41 +689,64 @@
     return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  let allExecutors = [];
+
+  function renderExecutorList(list) {
+    const listEl = document.getElementById('executorList');
+    if (!allExecutors.length) {
+      listEl.innerHTML = '<div class="executor-empty-hint">Немає доданих виконавців. Додайте через бота кнопкою «➕ Додати виконавця».</div>';
+      return;
+    }
+    if (!list.length) {
+      listEl.innerHTML = '<div class="executor-empty-hint">Нікого не знайдено</div>';
+      return;
+    }
+    const selectedId = document.getElementById('executorId').value;
+    listEl.innerHTML = list
+      .map((e) => {
+        const initial = (e.firstName || e.username || '?').trim().charAt(0).toUpperCase();
+        return `
+      <div class="executor-item${e.id === selectedId ? ' selected' : ''}" data-id="${e.id}">
+        <img class="executor-avatar" src="/api/executors/${e.id}/avatar" alt=""
+             onerror="this.outerHTML='<div class=&quot;executor-avatar-fallback&quot;>${initial}</div>'" />
+        <div class="executor-info">
+          <div class="executor-name">${esc(e.firstName)} ${esc(e.lastName)}</div>
+          ${e.username ? `<div class="executor-username">@${esc(e.username)}</div>` : ''}
+          ${e.pending ? '<div class="executor-pending">⏳ ще не запускав бота</div>' : ''}
+        </div>
+      </div>`;
+      })
+      .join('');
+    listEl.querySelectorAll('.executor-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        listEl.querySelectorAll('.executor-item').forEach((i) => i.classList.remove('selected'));
+        item.classList.add('selected');
+        document.getElementById('executorId').value = item.dataset.id;
+      });
+    });
+  }
+
   async function loadExecutors() {
     const listEl = document.getElementById('executorList');
     try {
-      const executors = await apiFetch('/api/executors');
-      if (!executors.length) {
-        listEl.innerHTML = '<div class="executor-empty-hint">Немає доданих виконавців. Додайте через бота кнопкою «➕ Додати виконавця».</div>';
-        return;
-      }
-      listEl.innerHTML = executors
-        .map((e) => {
-          const initial = (e.firstName || e.username || '?').trim().charAt(0).toUpperCase();
-          return `
-        <div class="executor-item" data-id="${e.id}">
-          <img class="executor-avatar" src="/api/executors/${e.id}/avatar" alt=""
-               onerror="this.outerHTML='<div class=&quot;executor-avatar-fallback&quot;>${initial}</div>'" />
-          <div class="executor-info">
-            <div class="executor-name">${esc(e.firstName)} ${esc(e.lastName)}</div>
-            ${e.username ? `<div class="executor-username">@${esc(e.username)}</div>` : ''}
-            ${e.pending ? '<div class="executor-pending">⏳ ще не запускав бота</div>' : ''}
-          </div>
-        </div>`;
-        })
-        .join('');
-      listEl.querySelectorAll('.executor-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          listEl.querySelectorAll('.executor-item').forEach((i) => i.classList.remove('selected'));
-          item.classList.add('selected');
-          document.getElementById('executorId').value = item.dataset.id;
-        });
-      });
+      allExecutors = await apiFetch('/api/executors');
+      renderExecutorList(allExecutors);
     } catch (err) {
       listEl.innerHTML = '<div class="executor-empty-hint">Не вдалося завантажити виконавців</div>';
     }
   }
   loadExecutors();
+
+  document.getElementById('executorSearch').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtered = !q
+      ? allExecutors
+      : allExecutors.filter((ex) => {
+          const name = [ex.firstName, ex.lastName].filter(Boolean).join(' ').toLowerCase();
+          return name.includes(q) || (ex.username || '').toLowerCase().includes(q);
+        });
+    renderExecutorList(filtered);
+  });
 
   // ---------- Допоміжне: значення поля лише якщо воно видиме ----------
   function val(id) {
@@ -680,6 +773,7 @@
       timeFrom: val('timeFrom'),
       timeTo: val('timeTo'),
       orderId: val('orderId'),
+      connectionType,
       technology: getTechnology(),
       clientId: val('clientId'),
       clientName: val('clientName'),
@@ -706,12 +800,13 @@
       document.getElementById('city').value = 'Звягель';
       document.getElementById('timeFrom').value = '11:00';
       document.getElementById('additionalInfoList').innerHTML = '';
-      techCustom.style.display = 'none';
+      renderTechOptions(connectionType);
       if (marker) { map.removeLayer(marker); marker = null; }
       document.getElementById('lat').value = '';
       document.getElementById('lng').value = '';
       document.getElementById('executorId').value = '';
-      document.querySelectorAll('.executor-item.selected').forEach((i) => i.classList.remove('selected'));
+      document.getElementById('executorSearch').value = '';
+      renderExecutorList(allExecutors);
       timeChips.forEach((c) => c.classList.remove('active'));
       hideWarning(taskIdWarning);
       hideWarning(orderIdWarning);

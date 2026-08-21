@@ -114,6 +114,7 @@ function createRequest(data) {
     timeFrom: data.timeFrom || '',
     timeTo: data.timeTo || '',
     orderId: data.orderId || '',
+    connectionType: data.connectionType === 'PON' ? 'PON' : 'FTTB',
     technology: data.technology || '',
     clientId: data.clientId || '',
     email: data.email || '',

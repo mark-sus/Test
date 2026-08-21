@@ -34,12 +34,25 @@
     opacity: 0.6;
     margin-left: 3px;
   }
+  .search-field {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: var(--radius);
+    border: 1px solid rgba(0,0,0,0.08);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    font-family: inherit;
+    margin-bottom: 14px;
+  }
 </style>
 </head>
 <body>
 <div class="screen">
   <div class="top-bar" id="topBar"></div>
   <h1 id="heading">Мої заявки</h1>
+
+  <input type="text" class="search-field" id="searchInput" placeholder="🔍 Пошук за ID, адресою, клієнтом, телефоном…" />
 
   <div class="tabs">
     <div class="tab active" data-tab="active" id="tabActive">Нові<span class="count" id="countActive"></span></div>
@@ -79,6 +92,30 @@
 
   let currentTab = 'active';
   let allRequests = [];
+  let searchQuery = '';
+
+  function matchesSearch(r) {
+    if (!searchQuery) return true;
+    const haystack = [
+      r.taskId,
+      r.orderId,
+      r.clientId,
+      r.clientName,
+      r.city,
+      r.street,
+      r.apt,
+      r.phone,
+      r.homePhone,
+      r.mobilePhone,
+      r.technology,
+      r.email,
+      r.connectionType,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return haystack.includes(searchQuery);
+  }
 
   async function apiFetch(url, options = {}) {
     const headers = options.headers || {};
@@ -100,13 +137,18 @@
   function renderList() {
     const listEl = document.getElementById('list');
     const statuses = currentTab === 'active' ? ACTIVE_STATUSES : DONE_STATUSES;
-    const filtered = allRequests.filter((r) => statuses.includes(r.status));
+    const filtered = allRequests.filter((r) => statuses.includes(r.status) && matchesSearch(r));
 
     document.getElementById('countActive').textContent = allRequests.filter((r) => ACTIVE_STATUSES.includes(r.status)).length || '';
     document.getElementById('countDone').textContent = allRequests.filter((r) => DONE_STATUSES.includes(r.status)).length || '';
 
     if (!filtered.length) {
-      listEl.innerHTML = `<div class="empty">${currentTab === 'active' ? 'Нових заявок немає' : 'Виконаних заявок ще немає'}</div>`;
+      const emptyMsg = searchQuery
+        ? 'Нічого не знайдено'
+        : currentTab === 'active'
+        ? 'Нових заявок немає'
+        : 'Виконаних заявок ще немає';
+      listEl.innerHTML = `<div class="empty">${emptyMsg}</div>`;
       return;
     }
 
@@ -124,6 +166,11 @@
       })
       .join('');
   }
+
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    searchQuery = e.target.value.trim().toLowerCase();
+    renderList();
+  });
 
   document.querySelectorAll('.tab').forEach((tab) => {
     tab.addEventListener('click', () => {

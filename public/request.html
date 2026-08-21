@@ -192,6 +192,7 @@
           <span class="k">Статус</span>
           <span class="badge ${r.status}">${statusLabels[r.status] || r.status}</span>
         </div>
+        ${r.connectionType ? `<div class="kv"><span class="k">Тип підключення</span><span class="v">${esc(r.connectionType)}</span></div>` : ''}
         ${copyRow('ID завдання', r.taskId)}
         ${timeStr ? `<div class="kv"><span class="k">Час</span><span class="v">${esc(timeStr)}</span></div>` : ''}
         ${copyRow('ID наряду', r.orderId)}
