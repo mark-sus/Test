@@ -186,6 +186,43 @@ function updateRequest(id, patch) {
   return getRequest(id);
 }
 
+// Повне редагування заявки адміністратором (лише поки статус new/rescheduled — перевіряється на рівні server.js)
+function updateRequestFull(id, data) {
+  const patch = {
+    taskId: data.taskId || '',
+    timeFrom: data.timeFrom || '',
+    timeTo: data.timeTo || '',
+    orderId: data.orderId || '',
+    connectionType: data.connectionType === 'PON' ? 'PON' : 'FTTB',
+    technology: data.technology || '',
+    clientId: data.clientId || '',
+    email: data.email || '',
+    clientName: data.clientName || '',
+    homePhone: data.homePhone || '',
+    mobilePhone: data.mobilePhone || '',
+    phone: data.phone || '',
+    city: data.city || 'Звягель',
+    street: data.street || '',
+    apt: data.apt || '',
+    lat: data.lat || null,
+    lng: data.lng || null,
+    port: data.port || '',
+    tkdAddress: data.tkdAddress || '',
+    tkd: data.tkd || '',
+    additionalInfo: Array.isArray(data.additionalInfo)
+      ? data.additionalInfo
+          .filter((item) => item && (item.name || item.value))
+          .map((item) => ({
+            name: item.name || '',
+            value: item.value || '',
+            copyable: !!item.copyable,
+          }))
+      : [],
+    executorId: data.executorId || '',
+  };
+  return updateRequest(id, patch);
+}
+
 function deleteRequest(id) {
   const existed = !!getRequest(id);
   db.get('requests').remove({ id }).write();
@@ -247,6 +284,7 @@ module.exports = {
   findRequestByTaskId,
   findRequestByOrderId,
   updateRequest,
+  updateRequestFull,
   deleteRequest,
   addMessage,
   listMessages,

@@ -252,6 +252,16 @@ async function notifyExecutorReview(request, approved) {
   );
 }
 
+// Адмін відредагував заявку — сповіщаємо призначеного виконавця про зміни
+async function notifyExecutorUpdated(request) {
+  if (!request.executorId) return;
+  const executor = db.getExecutor(request.executorId);
+  if (!executor) return;
+  const url = `${PUBLIC_URL}/request.html?id=${request.id}`;
+  const extra = Markup.inlineKeyboard([Markup.button.webApp('Відкрити заявку', url)]);
+  await sendIfEnabled(executor.chatId, `✏️ Заявку оновлено ${requestSummary(request)}`, extra);
+}
+
 
 async function sendMessageNotification(chatId, request, message, replyRole, fromLabel) {
   if (!db.getNotificationsEnabled(chatId)) return;
@@ -291,6 +301,7 @@ module.exports = {
   notifyAdminsConfirmed,
   notifyAdminsRescheduled,
   notifyExecutorReview,
+  notifyExecutorUpdated,
   notifyNewMessage,
   getExecutorAvatarUrl,
 };

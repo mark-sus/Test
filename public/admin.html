@@ -155,7 +155,7 @@
 <body>
 <div class="screen">
   <div class="top-bar" id="topBar"></div>
-  <h1>Нова заявка</h1>
+  <h1 id="formHeading">Нова заявка</h1>
 
   <div class="tabs" id="typeTabs">
     <div class="tab active" data-type="FTTB">🏢 FTTB</div>
@@ -315,7 +315,7 @@
       <input type="hidden" id="executorId" />
     </div>
 
-    <button type="submit" class="btn">Створити заявку</button>
+    <button type="submit" class="btn" id="submitBtn">Створити заявку</button>
   </form>
 </div>
 
@@ -328,9 +328,14 @@
   tg?.ready();
   tg?.expand();
 
+  const params = new URLSearchParams(location.search);
+  const editId = params.get('id');
+  let isEditMode = false;
+
   const topBar = document.getElementById('topBar');
-  topBar.appendChild(AppCommon.renderBackButton('requests.html?role=admin'));
-  AppCommon.initTelegramBackButton('requests.html?role=admin');
+  const backTarget = editId ? `request.html?id=${editId}&role=admin` : 'requests.html?role=admin';
+  topBar.appendChild(AppCommon.renderBackButton(backTarget));
+  AppCommon.initTelegramBackButton(backTarget);
 
   function showToast(msg) {
     const t = document.getElementById('toast');
@@ -410,6 +415,7 @@
     const params = new URLSearchParams();
     if (taskId) params.set('taskId', taskId);
     if (orderId) params.set('orderId', orderId);
+    if (editId) params.set('excludeId', editId);
     try {
       const result = await apiFetch(`/api/requests/check-duplicate?${params.toString()}`);
       if (result.taskId) showWarning(taskIdWarning, 'ID завдання', taskId, result.taskId);
@@ -735,7 +741,7 @@
       listEl.innerHTML = '<div class="executor-empty-hint">Не вдалося завантажити виконавців</div>';
     }
   }
-  loadExecutors();
+  const executorsLoadPromise = loadExecutors();
 
   document.getElementById('executorSearch').addEventListener('input', (e) => {
     const q = e.target.value.trim().toLowerCase();
@@ -794,6 +800,13 @@
     };
 
     try {
+      if (isEditMode) {
+        await apiFetch(`/api/requests/${editId}`, { method: 'PUT', body: JSON.stringify(payload) });
+        showToast('Заявку оновлено ✅');
+        setTimeout(() => AppCommon.goBack(`request.html?id=${editId}&role=admin`), 500);
+        return;
+      }
+
       await apiFetch('/api/requests', { method: 'POST', body: JSON.stringify(payload) });
       showToast('Заявку створено та надіслано виконавцю ✅');
       document.getElementById('form').reset();
@@ -814,6 +827,93 @@
       showToast(err.message || 'Помилка створення заявки');
     }
   });
+
+  // ---------- Режим редагування (адмін відкрив заявку на редагування) ----------
+  async function loadForEdit() {
+    if (!editId) return;
+    let r;
+    try {
+      r = await apiFetch(`/api/requests/${editId}`);
+    } catch (err) {
+      showToast('Не вдалося завантажити заявку для редагування');
+      return;
+    }
+
+    if (!['new', 'rescheduled'].includes(r.status)) {
+      showToast('Цю заявку не можна редагувати: вона на перевірці або вже виконана');
+      setTimeout(() => AppCommon.goBack(`request.html?id=${editId}&role=admin`), 1400);
+      return;
+    }
+
+    isEditMode = true;
+    document.getElementById('formHeading').textContent = `Редагування заявки №${r.taskId}`;
+    document.getElementById('submitBtn').textContent = 'Зберегти зміни';
+
+    setConnectionType(r.connectionType === 'PON' ? 'PON' : 'FTTB');
+
+    document.getElementById('taskId').value = r.taskId || '';
+    document.getElementById('timeFrom').value = r.timeFrom || '';
+    document.getElementById('timeTo').value = r.timeTo || '';
+    document.getElementById('orderId').value = r.orderId || '';
+
+    if (r.technology) {
+      const hasOption = [...techSelect.options].some((o) => o.value === r.technology);
+      if (hasOption) {
+        techSelect.value = r.technology;
+        techCustom.style.display = 'none';
+      } else {
+        techSelect.value = '__custom';
+        techCustom.style.display = 'block';
+        techCustom.value = r.technology;
+      }
+    }
+
+    document.getElementById('clientId').value = r.clientId || '';
+    document.getElementById('clientName').value = r.clientName || '';
+    document.getElementById('email').value = r.email || '';
+    document.getElementById('homePhone').value = r.homePhone || '';
+    document.getElementById('mobilePhone').value = r.mobilePhone || '';
+    document.getElementById('phone').value = r.phone || '';
+
+    document.getElementById('city').value = r.city || '';
+    document.getElementById('street').value = r.street || '';
+    document.getElementById('apt').value = r.apt || '';
+
+    if (r.lat && r.lng) {
+      const lat = parseFloat(r.lat);
+      const lng = parseFloat(r.lng);
+      setLocTab('map');
+      setMarker(lat, lng);
+      map.setView([lat, lng], 16);
+      setTimeout(() => map.invalidateSize(), 300);
+    }
+
+    if (r.port) {
+      const [portType, portNum] = r.port.split('.');
+      document.getElementById('portType').value = portType || '';
+      portNumberSelect.value = portNum || '';
+    }
+    document.getElementById('tkdAddress').value = r.tkdAddress || '';
+    document.getElementById('tkd').value = r.tkd || '';
+
+    document.getElementById('additionalInfoList').innerHTML = '';
+    (r.additionalInfo || []).forEach((item) => {
+      addInfoRow();
+      const rows = document.querySelectorAll('#additionalInfoList .info-row');
+      const row = rows[rows.length - 1];
+      row.querySelector('.info-name').value = item.name || '';
+      row.querySelector('.info-value').value = item.value || '';
+      row.querySelector('.info-copyable').checked = !!item.copyable;
+    });
+
+    await executorsLoadPromise;
+    if (r.executorId) {
+      document.getElementById('executorId').value = r.executorId;
+      renderExecutorList(allExecutors);
+    }
+  }
+
+  loadForEdit();
 </script>
 </body>
 </html>

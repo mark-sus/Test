@@ -126,6 +126,9 @@
           <button class="btn" id="approveBtn">Прийняти виконання</button>
           <button class="btn secondary" id="rejectBtn">Повернути на доопрацювання</button>`;
       }
+      if (r.status === 'new' || r.status === 'rescheduled') {
+        actionsHtml += `<a class="btn secondary" href="admin.html?id=${r.id}" style="display:block; text-align:center; text-decoration:none;">✏️ Редагувати заявку</a>`;
+      }
     } else if (r.executorId) {
       if (r.status === 'new') {
         actionsHtml += `

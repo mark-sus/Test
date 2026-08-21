@@ -13,6 +13,7 @@ const {
   notifyAdminsConfirmed,
   notifyAdminsRescheduled,
   notifyExecutorReview,
+  notifyExecutorUpdated,
   notifyNewMessage,
   getExecutorAvatarUrl,
 } = require('./bot');
@@ -142,17 +143,17 @@ app.post('/api/requests', async (req, res) => {
   }
 });
 
-// Перевірка дублікатів ID завдання / ID наряда під час заповнення форми створення заявки
+// Перевірка дублікатів ID завдання / ID наряда під час заповнення форми створення/редагування заявки
 app.get('/api/requests/check-duplicate', (req, res) => {
-  const { taskId, orderId } = req.query;
+  const { taskId, orderId, excludeId } = req.query;
   const result = {};
   if (taskId) {
     const existing = db.findRequestByTaskId(taskId);
-    if (existing) result.taskId = { id: existing.id, status: existing.status };
+    if (existing && existing.id !== excludeId) result.taskId = { id: existing.id, status: existing.status };
   }
   if (orderId) {
     const existing = db.findRequestByOrderId(orderId);
-    if (existing) result.orderId = { id: existing.id, status: existing.status };
+    if (existing && existing.id !== excludeId) result.orderId = { id: existing.id, status: existing.status };
   }
   res.json(result);
 });
@@ -168,6 +169,35 @@ app.get('/api/requests/:id', (req, res) => {
   if (!request) return res.status(404).json({ error: 'not found' });
   const executor = db.getExecutor(request.executorId);
   res.json({ ...request, executorName: executor ? [executor.firstName, executor.lastName].filter(Boolean).join(' ') : '' });
+});
+
+// Адмін повністю редагує заявку — дозволено лише поки вона ще не на перевірці й не виконана
+app.put('/api/requests/:id', async (req, res) => {
+  const chatId = getChatIdFromReq(req);
+  if (VERIFY_INIT_DATA && (!chatId || !isAdmin(chatId))) {
+    return res.status(403).json({ error: 'лише адміністратор може редагувати заявки' });
+  }
+  const existing = db.getRequest(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+  if (!['new', 'rescheduled'].includes(existing.status)) {
+    return res.status(409).json({ error: 'Цю заявку не можна редагувати: вона вже на перевірці або виконана' });
+  }
+  const b = req.body;
+  if (!b.taskId && !b.orderId && !b.clientId && !b.street) {
+    return res.status(400).json({ error: 'Заповніть хоча б одне поле заявки' });
+  }
+  const request = db.updateRequestFull(req.params.id, b);
+  try {
+    if (b.executorId && b.executorId !== existing.executorId) {
+      // призначено іншого виконавця — повідомляємо як про нову заявку
+      await notifyExecutorNewRequest(request);
+    } else {
+      await notifyExecutorUpdated(request);
+    }
+  } catch (notifyErr) {
+    console.error('[notify] не вдалося надіслати повідомлення про оновлення заявки:', notifyErr.message);
+  }
+  res.json(request);
 });
 
 // Виконавець підтверджує виконання -> заявка йде на перевірку адміну
